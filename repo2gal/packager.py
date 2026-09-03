@@ -78,6 +78,8 @@ def ensure_template(*, log=lambda _m: None) -> Path:
         raise PackageError(f"模板 SHA-256 不匹配：期望 {WEBGAL_SHA256}，实际 {digest}")
 
     # 解压到缓存同父目录的 staging，校验结构后原子替换缓存，避免留下半个模板。
+    # 全新环境（例如 GitHub Actions）里缓存根目录可能尚不存在。
+    dest.parent.mkdir(parents=True, exist_ok=True)
     staging = Path(
         tempfile.mkdtemp(prefix=f".webgal-{WEBGAL_VERSION}.staging-", dir=str(dest.parent))
     )
