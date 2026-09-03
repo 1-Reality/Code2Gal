@@ -179,7 +179,14 @@ def run_backup(
             handle.write(token)
             token_file = handle.name
         os.chmod(token_file, 0o600)
-        option = "--token-fine" if token.startswith("github_pat_") else "--token"
+        # GitHub Actions' built-in GITHUB_TOKEN is a GitHub App installation
+        # token (normally ghs_*), not a user PAT. python-github-backup otherwise
+        # probes GET /user and receives 401, so explicitly use its app-auth mode.
+        if token.startswith("ghs_"):
+            command.append("--as-app")
+            option = "--token"
+        else:
+            option = "--token-fine" if token.startswith("github_pat_") else "--token"
         command.extend((option, Path(token_file).as_uri()))
 
         log(f"调用 python-github-backup 采集 {owner}/{repo}")
