@@ -238,9 +238,9 @@ jobs:
           {
             echo "## Repo2Gal"
             echo
-            echo "- Target: `$TARGET_REPOSITORY`"
-            echo "- Result: `$GENERATE_OUTCOME`"
-            echo "- Dry run: `$DRY_RUN`"
+            printf '%s\n' "- Target: \`$TARGET_REPOSITORY\`"
+            printf '%s\n' "- Result: \`$GENERATE_OUTCOME\`"
+            printf '%s\n' "- Dry run: \`$DRY_RUN\`"
             if [[ "$DRY_RUN" != "true" && -f "output/$OUTPUT_REPO/index.html" ]]; then
               echo "- WebGAL site: included in the downloadable Actions artifact"
             else
