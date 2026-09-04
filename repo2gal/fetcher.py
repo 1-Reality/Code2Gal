@@ -117,6 +117,25 @@ def parse_repo(url: str) -> tuple[str, str]:
 
 # 不使用 --all：上游的 --all 会额外下载 Release 二进制并读取 hooks，可能需要
 # 高权限 token，也可能意外拉取数十 GB。这里显式列出生成叙事真正需要的全量数据。
+def _resolve_repo_backup_dir(backup_root: Path, repo: str) -> Path:
+    """兼容 GitHub 仓库名大小写归一化。
+
+    GitHub URL/REST 对仓库名大小写不敏感，但 Linux 文件系统敏感；
+    python-github-backup 会按 GitHub 返回的 canonical name 落盘。
+    """
+    repositories = Path(backup_root).resolve() / "repositories"
+    exact = repositories / repo
+    if exact.exists() or not repositories.is_dir():
+        return exact
+
+    matches = [
+        path
+        for path in repositories.iterdir()
+        if path.is_dir() and path.name.casefold() == repo.casefold()
+    ]
+    return matches[0] if len(matches) == 1 else exact
+
+
 NARRATIVE_BACKUP_FLAGS = (
     "--repositories",
     "--issues",
@@ -165,8 +184,8 @@ def run_backup(
         raise FetchError("找不到 github-backup，请执行 pip install github-backup")
 
     backup_root = Path(backup_root).resolve()
-    repo_dir = backup_root / "repositories" / repo
     backup_root.mkdir(parents=True, exist_ok=True)
+    repo_dir = _resolve_repo_backup_dir(backup_root, repo)
 
     command = [
         executable,
@@ -222,6 +241,7 @@ def run_backup(
         if token_file:
             Path(token_file).unlink(missing_ok=True)
 
+    repo_dir = _resolve_repo_backup_dir(backup_root, repo)
     if not repo_dir.exists():
         raise FetchError(f"github-backup 未产出预期目录：{repo_dir}")
     log(f"原始备份已保存：{repo_dir}")
@@ -733,7 +753,7 @@ def fetch_context(
             "python-github-backup 需要 GitHub Token；请设置 GITHUB_TOKEN，"
             "或用 --reuse-backup 读取已有备份"
         )
-    expected = Path(backup_root).resolve() / "repositories" / repo
+    expected = _resolve_repo_backup_dir(Path(backup_root), repo)
     if reuse_backup:
         if not expected.exists():
             raise FetchError(f"--reuse-backup 指定的备份不存在：{expected}")
