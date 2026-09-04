@@ -57,6 +57,8 @@ class RunOptions:
     reuse_backup: bool = False
     organization: bool = False
     top_threads: int = 12
+    source_context: bool = False
+    source_history: int = 1
     token: str | None = None
     script: Path | None = None
     dry_run: bool = False
@@ -143,6 +145,8 @@ def _default_fetch(options: RunOptions, log: Callable, progress: Callable) -> Re
         organization=options.organization,
         top_threads=options.top_threads,
         reuse_backup=options.reuse_backup,
+        source_context=options.source_context,
+        source_history=options.source_history,
         log=log,
         progress=progress,
     )
@@ -171,6 +175,8 @@ def run_pipeline(
         raise UsageError("--strict-performance 必须与 --performance 一起使用")
     if options.performance_profile not in PROFILES:
         raise UsageError(f"未知动态演出 profile：{options.performance_profile}")
+    if options.source_history < 0 or options.source_history > 3:
+        raise UsageError("--source-history 仅允许 0 到 3")
 
     # --- 阶段 0：本地素材包先校验，避免无效输入触发慢速采集或付费 LLM ---
     if options.public_assets and options.asset_pack is None:
