@@ -73,29 +73,29 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 45
     outputs:
-      allowed: \${{ steps.price_gate.outputs.allowed }}
-      generated: \${{ steps.state.outputs.generated }}
-      slug: \${{ steps.target.outputs.slug }}
-      artifact_name: \${{ steps.artifact.outputs.name }}
+      allowed: ${{ steps.price_gate.outputs.allowed }}
+      generated: ${{ steps.state.outputs.generated }}
+      slug: ${{ steps.target.outputs.slug }}
+      artifact_name: ${{ steps.artifact.outputs.name }}
     env:
-      GITHUB_TOKEN: \${{ secrets.REPO2GAL_GITHUB_TOKEN || github.token }}
-      REPO2GAL_API_KEY: \${{ secrets.REPO2GAL_API_KEY }}
-      REPO2GAL_BASE_URL: \${{ inputs.base_url }}
-      REPO2GAL_MODEL: \${{ inputs.model }}
+      GITHUB_TOKEN: ${{ secrets.REPO2GAL_GITHUB_TOKEN || github.token }}
+      REPO2GAL_API_KEY: ${{ secrets.REPO2GAL_API_KEY }}
+      REPO2GAL_BASE_URL: ${{ inputs.base_url }}
+      REPO2GAL_MODEL: ${{ inputs.model }}
 
     steps:
       - name: Checkout Code2Gal
         uses: actions/checkout@v4
         with:
-          ref: \${{ inputs.code_ref }}
+          ref: ${{ inputs.code_ref }}
 
       - name: Check DeepSeek price window
         id: price_gate
         shell: bash
         env:
-          FORCE_RUN: \${{ inputs.force_run }}
-          DRY_RUN: \${{ inputs.dry_run }}
-          BASE_URL: \${{ inputs.base_url }}
+          FORCE_RUN: ${{ inputs.force_run }}
+          DRY_RUN: ${{ inputs.dry_run }}
+          BASE_URL: ${{ inputs.base_url }}
         run: |
           set -euo pipefail
 
@@ -138,7 +138,7 @@ jobs:
         if: steps.price_gate.outputs.allowed == 'true'
         shell: bash
         env:
-          TARGET_INPUT: \${{ inputs.repository }}
+          TARGET_INPUT: ${{ inputs.repository }}
         run: |
           set -euo pipefail
           target="\${TARGET_INPUT#https://github.com/}"
@@ -163,10 +163,10 @@ jobs:
         if: steps.price_gate.outputs.allowed == 'true'
         shell: bash
         env:
-          OPTIONAL_GITHUB_TOKEN: \${{ secrets.REPO2GAL_GITHUB_TOKEN }}
-          CURRENT_REPOSITORY: \${{ github.repository }}
-          TARGET_REPOSITORY: \${{ steps.target.outputs.target }}
-          DRY_RUN: \${{ inputs.dry_run }}
+          OPTIONAL_GITHUB_TOKEN: ${{ secrets.REPO2GAL_GITHUB_TOKEN }}
+          CURRENT_REPOSITORY: ${{ github.repository }}
+          TARGET_REPOSITORY: ${{ steps.target.outputs.target }}
+          DRY_RUN: ${{ inputs.dry_run }}
         run: |
           set -euo pipefail
 
@@ -206,16 +206,16 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~/.cache/repo2gal
-          key: \${{ runner.os }}-repo2gal-webgal-\${{ hashFiles('repo2gal/packager.py') }}
+          key: ${{ runner.os }}-repo2gal-webgal-${{ hashFiles('repo2gal/packager.py') }}
 
       - name: Restore incremental repository backup
         if: steps.price_gate.outputs.allowed == 'true'
         uses: actions/cache@v4
         with:
-          path: .repo2gal/backups/\${{ steps.target.outputs.owner }}
-          key: \${{ runner.os }}-repo2gal-backup-\${{ steps.target.outputs.slug }}-\${{ github.run_id }}-\${{ inputs.task_id }}
+          path: .repo2gal/backups/${{ steps.target.outputs.owner }}
+          key: ${{ runner.os }}-repo2gal-backup-${{ steps.target.outputs.slug }}-${{ github.run_id }}-${{ inputs.task_id }}
           restore-keys: |
-            \${{ runner.os }}-repo2gal-backup-\${{ steps.target.outputs.slug }}-
+            ${{ runner.os }}-repo2gal-backup-${{ steps.target.outputs.slug }}-
 
       - name: Validate built-in CC0 asset pack
         if: steps.price_gate.outputs.allowed == 'true' && !inputs.dry_run
@@ -226,17 +226,17 @@ jobs:
         if: steps.price_gate.outputs.allowed == 'true'
         shell: bash
         env:
-          TARGET_REPOSITORY: \${{ steps.target.outputs.target }}
-          MODEL: \${{ inputs.model }}
-          BASE_URL: \${{ inputs.base_url }}
-          THREADS: \${{ inputs.threads }}
-          SOURCE_CONTEXT: \${{ inputs.source_context }}
-          SOURCE_HISTORY: \${{ inputs.source_history }}
-          PERFORMANCE: \${{ inputs.performance }}
-          STRICT: \${{ inputs.strict }}
-          STRICT_PERFORMANCE: \${{ inputs.strict_performance }}
-          DRY_RUN: \${{ inputs.dry_run }}
-          CODE_REF: \${{ inputs.code_ref }}
+          TARGET_REPOSITORY: ${{ steps.target.outputs.target }}
+          MODEL: ${{ inputs.model }}
+          BASE_URL: ${{ inputs.base_url }}
+          THREADS: ${{ inputs.threads }}
+          SOURCE_CONTEXT: ${{ inputs.source_context }}
+          SOURCE_HISTORY: ${{ inputs.source_history }}
+          PERFORMANCE: ${{ inputs.performance }}
+          STRICT: ${{ inputs.strict }}
+          STRICT_PERFORMANCE: ${{ inputs.strict_performance }}
+          DRY_RUN: ${{ inputs.dry_run }}
+          CODE_REF: ${{ inputs.code_ref }}
         run: |
           set -euo pipefail
           mkdir -p .repo2gal/audit
@@ -262,15 +262,15 @@ jobs:
         if: steps.price_gate.outputs.allowed == 'true'
         shell: bash
         env:
-          TARGET_REPOSITORY: \${{ steps.target.outputs.target }}
-          OUTPUT_REPO: \${{ steps.target.outputs.repo }}
-          THREADS: \${{ inputs.threads }}
-          SOURCE_CONTEXT: \${{ inputs.source_context }}
-          SOURCE_HISTORY: \${{ inputs.source_history }}
-          PERFORMANCE: \${{ inputs.performance }}
-          STRICT: \${{ inputs.strict }}
-          STRICT_PERFORMANCE: \${{ inputs.strict_performance }}
-          DRY_RUN: \${{ inputs.dry_run }}
+          TARGET_REPOSITORY: ${{ steps.target.outputs.target }}
+          OUTPUT_REPO: ${{ steps.target.outputs.repo }}
+          THREADS: ${{ inputs.threads }}
+          SOURCE_CONTEXT: ${{ inputs.source_context }}
+          SOURCE_HISTORY: ${{ inputs.source_history }}
+          PERFORMANCE: ${{ inputs.performance }}
+          STRICT: ${{ inputs.strict }}
+          STRICT_PERFORMANCE: ${{ inputs.strict_performance }}
+          DRY_RUN: ${{ inputs.dry_run }}
         run: |
           set -euo pipefail
 
@@ -326,25 +326,25 @@ jobs:
         if: steps.generate.outcome == 'success'
         shell: bash
         env:
-          SLUG: \${{ steps.target.outputs.slug }}
-          TASK_ID: \${{ inputs.task_id }}
+          SLUG: ${{ steps.target.outputs.slug }}
+          TASK_ID: ${{ inputs.task_id }}
         run: echo "name=repo2gal-\${SLUG}-\${TASK_ID}" >> "$GITHUB_OUTPUT"
 
       - name: Write run summary
         if: always()
         shell: bash
         env:
-          ALLOWED: \${{ steps.price_gate.outputs.allowed }}
-          TARGET_REPOSITORY: \${{ steps.target.outputs.target }}
-          DRY_RUN: \${{ inputs.dry_run }}
-          GENERATE_OUTCOME: \${{ steps.generate.outcome }}
+          ALLOWED: ${{ steps.price_gate.outputs.allowed }}
+          TARGET_REPOSITORY: ${{ steps.target.outputs.target }}
+          DRY_RUN: ${{ inputs.dry_run }}
+          GENERATE_OUTCOME: ${{ steps.generate.outcome }}
         run: |
           {
             echo "## Repo2Gal"
             echo
             if [[ "$ALLOWED" != "true" ]]; then
               echo "- Status: deferred by DeepSeek low-price gate"
-              echo "- Queue entry: \`\${{ inputs.queue_file || 'none' }}\`"
+              echo "- Queue entry: \`${{ inputs.queue_file || 'none' }}\`"
             else
               printf '%s\n' "- Target: \`$TARGET_REPOSITORY\`"
               printf '%s\n' "- Result: \`$GENERATE_OUTCOME\`"
@@ -353,10 +353,10 @@ jobs:
           } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Upload WebGAL and audit files
-        if: \${{ always() && steps.price_gate.outputs.allowed == 'true' }}
+        if: ${{ always() && steps.price_gate.outputs.allowed == 'true' }}
         uses: actions/upload-artifact@v4
         with:
-          name: \${{ steps.artifact.outputs.name || format('repo2gal-failed-{0}', inputs.task_id) }}
+          name: ${{ steps.artifact.outputs.name || format('repo2gal-failed-{0}', inputs.task_id) }}
           path: |
             output/
             .repo2gal/audit/
@@ -367,7 +367,7 @@ jobs:
   clear_queue:
     name: Remove completed queue entry
     needs: generate
-    if: \${{ needs.generate.outputs.generated == 'true' && inputs.queue_file != '' && inputs.queue_request_id != '' }}
+    if: ${{ needs.generate.outputs.generated == 'true' && inputs.queue_file != '' && inputs.queue_request_id != '' }}
     runs-on: ubuntu-latest
     concurrency:
       group: code2gal-generation-queue
@@ -383,8 +383,8 @@ jobs:
       - name: Remove matching queue request
         shell: bash
         env:
-          QUEUE_FILE: \${{ inputs.queue_file }}
-          REQUEST_ID: \${{ inputs.queue_request_id }}
+          QUEUE_FILE: ${{ inputs.queue_file }}
+          REQUEST_ID: ${{ inputs.queue_request_id }}
         run: |
           set -euo pipefail
           cd generation-queue
@@ -415,14 +415,14 @@ jobs:
   deploy:
     name: Deploy WebGAL to GitHub Pages
     needs: generate
-    if: \${{ needs.generate.outputs.generated == 'true' && !inputs.dry_run && inputs.deploy_pages }}
+    if: ${{ needs.generate.outputs.generated == 'true' && !inputs.dry_run && inputs.deploy_pages }}
     runs-on: ubuntu-latest
     concurrency:
       group: code2gal-pages-store
       cancel-in-progress: false
     environment:
       name: github-pages
-      url: \${{ steps.deployment.outputs.page_url }}
+      url: ${{ steps.deployment.outputs.page_url }}
 
     steps:
       - name: Checkout Code2Gal deployment tools
@@ -441,7 +441,7 @@ jobs:
       - name: Download generated WebGAL artifact
         uses: actions/download-artifact@v8
         with:
-          name: \${{ needs.generate.outputs.artifact_name }}
+          name: ${{ needs.generate.outputs.artifact_name }}
           path: artifact
 
       - name: Locate generated WebGAL site
@@ -464,15 +464,15 @@ jobs:
         run: |
           set -euo pipefail
           python code2gal/tools/update_pages_store.py \
-            --site "\${{ steps.site.outputs.path }}" \
+            --site "${{ steps.site.outputs.path }}" \
             --store pages-store \
-            --project "\${{ steps.site.outputs.project }}"
+            --project "${{ steps.site.outputs.project }}"
 
       - name: Save persistent Pages store
         shell: bash
         working-directory: pages-store
         env:
-          PROJECT: \${{ steps.site.outputs.project }}
+          PROJECT: ${{ steps.site.outputs.project }}
         run: |
           set -euo pipefail
           git config user.name "github-actions[bot]"
