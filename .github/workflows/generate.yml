@@ -73,6 +73,8 @@ jobs:
   generate:
     name: Generate WebGAL artifact
     runs-on: ubuntu-latest
+    outputs:
+      slug: ${{ steps.target.outputs.slug }}
     timeout-minutes: 45
     env:
       GITHUB_TOKEN: ${{ secrets.REPO2GAL_GITHUB_TOKEN || github.token }}
@@ -288,18 +290,17 @@ jobs:
           retention-days: 30
           compression-level: 6
 
-      - name: Upload site for GitHub Pages
-        if: ${{ !inputs.dry_run && inputs.deploy_pages }}
-        uses: actions/upload-pages-artifact@v3
-        with:
-          path: output/${{ steps.target.outputs.repo }}/
-
   deploy:
     name: Deploy WebGAL to GitHub Pages
     if: ${{ !inputs.dry_run && inputs.deploy_pages }}
     needs: generate
     runs-on: ubuntu-latest
+    concurrency:
+      group: code2gal-pages-store
+      cancel-in-progress: false
     permissions:
+      actions: read
+      contents: write
       pages: write
       id-token: write
     environment:
@@ -307,6 +308,73 @@ jobs:
       url: ${{ steps.deployment.outputs.page_url }}
 
     steps:
+      - name: Checkout Code2Gal deployment tools
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          path: code2gal
+
+      - name: Checkout persistent Pages store
+        uses: actions/checkout@v4
+        with:
+          ref: pages-store
+          path: pages-store
+          fetch-depth: 1
+
+      - name: Download generated WebGAL artifact
+        uses: actions/download-artifact@v8
+        with:
+          name: repo2gal-${{ needs.generate.outputs.slug }}-${{ github.run_number }}
+          path: artifact
+
+      - name: Locate generated WebGAL site
+        id: site
+        shell: bash
+        run: |
+          set -euo pipefail
+          mapfile -t indexes < <(find artifact/output -mindepth 2 -maxdepth 2 -type f -name index.html -print)
+          if [[ ${#indexes[@]} -ne 1 ]]; then
+            echo "::error::Expected exactly one WebGAL site under artifact/output, found ${#indexes[@]}."
+            printf '%s\n' "${indexes[@]}"
+            exit 2
+          fi
+          site_dir="$(dirname "${indexes[0]}")"
+          echo "path=$site_dir" >> "$GITHUB_OUTPUT"
+          echo "project=$(basename "$site_dir")" >> "$GITHUB_OUTPUT"
+
+      - name: Merge project into persistent Pages store
+        shell: bash
+        run: |
+          set -euo pipefail
+          python code2gal/tools/update_pages_store.py \
+            --site "${{ steps.site.outputs.path }}" \
+            --store pages-store \
+            --project "${{ steps.site.outputs.project }}"
+
+      - name: Save persistent Pages store
+        shell: bash
+        working-directory: pages-store
+        env:
+          PROJECT: ${{ steps.site.outputs.project }}
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+
+          if git diff --cached --quiet; then
+            echo "Pages store already matches this project."
+          else
+            tree="$(git write-tree)"
+            commit="$(printf 'pages: publish %s\n' "$PROJECT" | git commit-tree "$tree")"
+            git push --force origin "$commit:pages-store"
+          fi
+
+      - name: Upload complete multi-project site for GitHub Pages
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: pages-store
+
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v4
