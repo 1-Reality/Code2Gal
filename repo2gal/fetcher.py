@@ -68,6 +68,15 @@ class Contributor:
 
 
 @dataclass
+class SourceSnapshot:
+    """送入 LLM 的源码快照。role 仅区分当前版与历史参考版。"""
+
+    path: str
+    role: str
+    content: str
+
+
+@dataclass
 class RepoContext:
     """喂给 LLM 的结构化上下文。"""
 
@@ -83,6 +92,7 @@ class RepoContext:
     contributors: list[Contributor] = field(default_factory=list)
     releases: list[Release] = field(default_factory=list)
     threads: list[Thread] = field(default_factory=list)
+    source_snapshots: list[SourceSnapshot] = field(default_factory=list)
     backup_dir: str = ""
 
     @property
@@ -478,6 +488,137 @@ def _detect_language(repo_dir: Path) -> str:
     return known.most_common(1)[0][0] if known else "未知"
 
 
+SOURCE_EXTENSIONS = {
+    ".c", ".cc", ".cpp", ".cs", ".dart", ".go", ".h", ".hpp", ".java", ".js",
+    ".jsx", ".kt", ".kts", ".php", ".ps1", ".py", ".rb", ".rs", ".sh", ".svelte",
+    ".swift", ".ts", ".tsx", ".vue",
+}
+SOURCE_SKIP_DIRS = {
+    ".git", ".github", "assets", "build", "dist", "node_modules", "target", "vendor",
+    "__pycache__",
+}
+CURRENT_SOURCE_LIMIT = 140_000
+HISTORY_SOURCE_LIMIT = 80_000
+
+
+def _read_source_snapshot(path: Path, *, limit: int) -> str:
+    """读取源码；超限时保留头尾，避免只留下 userscript header 而丢掉主体末端。"""
+    try:
+        text = path.read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError):
+        return ""
+    if len(text) <= limit:
+        return text
+    head = int(limit * 0.75)
+    tail = limit - head
+    return (
+        text[:head]
+        + "\n\n/* … Repo2Gal source-context: middle truncated … */\n\n"
+        + text[-tail:]
+    )
+
+
+def _is_source_file(path: Path) -> bool:
+    return path.is_file() and path.suffix.lower() in SOURCE_EXTENSIONS
+
+
+def _source_rank(path: Path, source_dir: Path, *, history: bool) -> tuple[int, int, str]:
+    """确定性排序。优先显式 latest/new 命名，再用目录语义和尺寸兜底。"""
+    rel = path.relative_to(source_dir).as_posix()
+    low = rel.lower()
+    name = path.name.lower()
+    score = 0
+
+    if name == "new.user.js":
+        score += 20_000
+    if "最新" in rel or "latest" in low:
+        score += 10_000
+    if not history and path.parent == source_dir:
+        score += 2_000
+    if history and ("历史大版本" in rel or "major" in low):
+        score += 2_000
+    if "/temp/" in f"/{low}/" or "/tmp/" in f"/{low}/":
+        score -= 20_000
+
+    # 同一语义等级下更完整的源码优先，但不让单纯的大文件压过 new/latest。
+    return score, min(path.stat().st_size, 2_000_000), rel
+
+
+def _collect_source_snapshots(
+    source_dir: Path,
+    *,
+    history_count: int = 1,
+) -> list[SourceSnapshot]:
+    """抽取当前源码与少量历史源码。
+
+    针对 userscript/单文件项目优先根目录 new.user.js；普通项目则从源码文件中
+    选最高优先级候选。history 只取少量代表版本，明确跳过 temp/tmp。
+    """
+    source_dir = Path(source_dir)
+    if not source_dir.is_dir():
+        return []
+
+    current_candidates: list[Path] = []
+    history_candidates: list[Path] = []
+    history_root = source_dir / "history"
+
+    for path in source_dir.rglob("*"):
+        if not _is_source_file(path):
+            continue
+        rel_parts = path.relative_to(source_dir).parts
+        if any(part in SOURCE_SKIP_DIRS for part in rel_parts[:-1]):
+            continue
+        if rel_parts and rel_parts[0] == "history":
+            if any(part.lower() in {"temp", "tmp"} for part in rel_parts[1:-1]):
+                continue
+            history_candidates.append(path)
+        else:
+            current_candidates.append(path)
+
+    current_candidates.sort(
+        key=lambda p: _source_rank(p, source_dir, history=False),
+        reverse=True,
+    )
+    history_candidates.sort(
+        key=lambda p: _source_rank(p, source_dir, history=True),
+        reverse=True,
+    )
+
+    snapshots: list[SourceSnapshot] = []
+    seen: set[str] = set()
+
+    # 单文件项目只取一个“当前主版本”，避免 new.user.js 与发布副本重复灌入。
+    if current_candidates:
+        path = current_candidates[0]
+        content = _read_source_snapshot(path, limit=CURRENT_SOURCE_LIMIT)
+        if content:
+            seen.add(content)
+            snapshots.append(
+                SourceSnapshot(
+                    path=path.relative_to(source_dir).as_posix(),
+                    role="current",
+                    content=content,
+                )
+            )
+
+    for path in history_candidates:
+        if len([s for s in snapshots if s.role == "history"]) >= max(0, history_count):
+            break
+        content = _read_source_snapshot(path, limit=HISTORY_SOURCE_LIMIT)
+        if not content or content in seen:
+            continue
+        seen.add(content)
+        snapshots.append(
+            SourceSnapshot(
+                path=path.relative_to(source_dir).as_posix(),
+                role="history",
+                content=content,
+            )
+        )
+
+    return snapshots
+
+
 def context_from_backup(
     owner: str,
     repo: str,
@@ -485,6 +626,8 @@ def context_from_backup(
     *,
     metadata: dict[str, Any] | None = None,
     top_threads: int = 12,
+    source_context: bool = False,
+    source_history: int = 1,
     log=lambda _msg: None,
 ) -> RepoContext:
     """把 python-github-backup 的落盘结果归一化成 RepoContext。"""
@@ -544,6 +687,11 @@ def context_from_backup(
         readme_excerpt=readme,
         wiki_excerpt=_read_wiki(repo_backup_dir / "wiki"),
         contributors=[Contributor(login=name, contributions=count) for name, count in activity.most_common(8)],
+        source_snapshots=(
+            _collect_source_snapshots(source_dir, history_count=source_history)
+            if source_context
+            else []
+        ),
         releases=releases[:10],
         threads=threads,
         backup_dir=str(repo_backup_dir),
@@ -552,6 +700,14 @@ def context_from_backup(
         f"上下文：{len(context.threads)} 条热门讨论（含 Discussion），"
         f"{len(context.releases)} 个 Release，wiki={'有' if context.wiki_excerpt else '无'}"
     )
+    if context.source_snapshots:
+        log(
+            "源码上下文："
+            + "，".join(
+                f"{item.role}={item.path}（{len(item.content)} 字）"
+                for item in context.source_snapshots
+            )
+        )
     if not context.threads and not context.readme_excerpt and not context.wiki_excerpt:
         raise FetchError("备份中没有 README、wiki 或社区讨论，素材不足以生成剧情")
     return context
@@ -566,6 +722,8 @@ def fetch_context(
     organization: bool = False,
     top_threads: int = 12,
     reuse_backup: bool = False,
+    source_context: bool = False,
+    source_history: int = 1,
     log=lambda _msg: None,
     progress=lambda _msg: None,
 ) -> RepoContext:
@@ -603,5 +761,7 @@ def fetch_context(
         repo_dir,
         metadata=metadata,
         top_threads=top_threads,
+        source_context=source_context,
+        source_history=source_history,
         log=log,
     )
