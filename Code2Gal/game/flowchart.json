@@ -1,0 +1,25 @@
+{
+  "flowcharts": [
+    {
+      "id": "main",
+      "name": "1-Reality/Code2Gal 编年史",
+      "type": "main",
+      "nodes": [
+        {
+          "id": "start",
+          "type": "root",
+          "position": {
+            "x": 0,
+            "y": 0
+          },
+          "data": {
+            "label": "开始",
+            "sceneName": "start.txt",
+            "isRoot": true
+          }
+        }
+      ],
+      "edges": []
+    }
+  ]
+}

@@ -1,0 +1,8 @@
+Game_name:ucxn/ZTE-Stat_Max 编年史;
+Game_key:repo2gal_ucxn_ZTE-Stat_Max;
+Title_img:WebGAL_New_Enter_Image.webp;
+Title_bgm:s_Title.mp3;
+Game_Logo:WebGalEnter.webp;
+Enable_Appreciation:true;
+Enable_Continue:true;
+Enable_flowchart:true;
