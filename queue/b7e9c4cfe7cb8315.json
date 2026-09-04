@@ -1,0 +1,17 @@
+{
+  "request_id": "33842603699-1",
+  "queue_name": "default",
+  "task_id": "run-27-b7e9c4cfe7cb8315",
+  "repository": "ucxn/Poker-Tractor-Simulate",
+  "model": "deepseek-v4-pro",
+  "base_url": "https://api.deepseek.com/v1",
+  "threads": "20",
+  "source_context": true,
+  "source_history": "1",
+  "performance": true,
+  "strict": false,
+  "strict_performance": false,
+  "dry_run": false,
+  "deploy_pages": true,
+  "code_ref": "source-context-lab"
+}
