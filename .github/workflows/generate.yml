@@ -43,6 +43,11 @@ on:
         required: true
         default: false
         type: boolean
+      deploy_pages:
+        description: "Publish the generated WebGAL site to GitHub Pages"
+        required: true
+        default: true
+        type: boolean
 
 permissions:
   contents: read
@@ -259,3 +264,26 @@ jobs:
           if-no-files-found: warn
           retention-days: 30
           compression-level: 6
+
+      - name: Upload site for GitHub Pages
+        if: ${{ !inputs.dry_run && inputs.deploy_pages }}
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: output/${{ steps.target.outputs.repo }}/
+
+  deploy:
+    name: Deploy WebGAL to GitHub Pages
+    if: ${{ !inputs.dry_run && inputs.deploy_pages }}
+    needs: generate
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
