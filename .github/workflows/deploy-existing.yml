@@ -23,8 +23,9 @@ jobs:
   deploy:
     name: Deploy existing WebGAL artifact
     runs-on: ubuntu-latest
+    # Keep manual deployment usable from experiment branches too.
     environment:
-      name: github-pages
+      name: github-pages-direct
       url: ${{ steps.deployment.outputs.page_url }}
 
     steps:
