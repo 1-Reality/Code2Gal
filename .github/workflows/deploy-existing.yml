@@ -11,12 +11,12 @@ on:
 
 permissions:
   actions: read
-  contents: read
+  contents: write
   pages: write
   id-token: write
 
 concurrency:
-  group: github-pages
+  group: code2gal-pages-store
   cancel-in-progress: false
 
 jobs:
@@ -115,6 +115,19 @@ jobs:
           echo "Run ID: $run_id"
           echo "Artifact: $artifact_name (#$artifact_id)"
 
+      - name: Checkout Code2Gal deployment tools
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          path: code2gal
+
+      - name: Checkout persistent Pages store
+        uses: actions/checkout@v4
+        with:
+          ref: pages-store
+          path: pages-store
+          fetch-depth: 1
+
       - name: Download generated artifact
         uses: actions/download-artifact@v8
         with:
@@ -141,10 +154,44 @@ jobs:
           echo "path=$site_dir" >> "$GITHUB_OUTPUT"
           echo "Found WebGAL site: $site_dir"
 
-      - name: Upload site for GitHub Pages
+      - name: Merge project into persistent Pages store
+        id: merge
+        shell: bash
+        env:
+          SITE_DIR: ${{ steps.site.outputs.path }}
+        run: |
+          set -euo pipefail
+          project="$(basename "$SITE_DIR")"
+          python code2gal/tools/update_pages_store.py \
+            --site "$SITE_DIR" \
+            --store pages-store \
+            --project "$project"
+          echo "project=$project" >> "$GITHUB_OUTPUT"
+
+      - name: Save persistent Pages store
+        shell: bash
+        working-directory: pages-store
+        env:
+          PROJECT: ${{ steps.merge.outputs.project }}
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+
+          if git diff --cached --quiet; then
+            echo "Pages store already matches this project."
+            exit 0
+          fi
+
+          tree="$(git write-tree)"
+          commit="$(printf 'pages: publish %s\n' "$PROJECT" | git commit-tree "$tree")"
+          git push --force origin "$commit:pages-store"
+
+      - name: Upload complete multi-project site for GitHub Pages
         uses: actions/upload-pages-artifact@v3
         with:
-          path: ${{ steps.site.outputs.path }}
+          path: pages-store
 
       - name: Deploy to GitHub Pages
         id: deployment
@@ -159,6 +206,7 @@ jobs:
             echo
             echo "- Source run: Generate Repo2Gal #${{ steps.resolve.outputs.run_number }}"
             echo "- Artifact: \`${{ steps.resolve.outputs.artifact_name }}\`"
+            echo "- Project path: \`/${{ steps.merge.outputs.project }}/\`"
             if [[ -n "${{ steps.deployment.outputs.page_url }}" ]]; then
               echo "- Pages: ${{ steps.deployment.outputs.page_url }}"
             fi
