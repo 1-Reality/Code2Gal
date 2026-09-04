@@ -1,0 +1,68 @@
+name: Deploy Existing WebGAL
+
+on:
+  workflow_dispatch:
+    inputs:
+      run_id:
+        description: "Generate Repo2Gal run ID containing the finished artifact"
+        required: true
+        default: "33820007613"
+        type: string
+      artifact_name:
+        description: "Artifact name from that run"
+        required: true
+        default: "repo2gal-ucxn-ZTE-Stat_Max-4"
+        type: string
+
+permissions:
+  actions: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: github-pages
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Deploy existing WebGAL artifact
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+
+    steps:
+      - name: Download generated artifact
+        uses: actions/download-artifact@v8
+        with:
+          name: ${{ inputs.artifact_name }}
+          path: artifact
+          github-token: ${{ github.token }}
+          repository: ${{ github.repository }}
+          run-id: ${{ inputs.run_id }}
+
+      - name: Locate WebGAL site
+        id: site
+        shell: bash
+        run: |
+          set -euo pipefail
+          mapfile -t indexes < <(find artifact/output -mindepth 2 -maxdepth 2 -type f -name index.html -print)
+
+          if [[ ${#indexes[@]} -ne 1 ]]; then
+            echo "::error::Expected exactly one WebGAL site under artifact/output, found ${#indexes[@]}."
+            printf '%s\n' "${indexes[@]}"
+            exit 2
+          fi
+
+          site_dir="$(dirname "${indexes[0]}")"
+          echo "path=$site_dir" >> "$GITHUB_OUTPUT"
+          echo "Found WebGAL site: $site_dir"
+
+      - name: Upload site for GitHub Pages
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: ${{ steps.site.outputs.path }}
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
