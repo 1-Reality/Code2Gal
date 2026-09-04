@@ -1,7 +1,12 @@
 name: Run queued Repo2Gal
 
 on:
-  # Scheduled queue draining is temporarily disabled until cross-branch Pages deployment is verified.
+  schedule:
+    # DeepSeek V4 off-peak boundaries, Beijing time:
+    # 12:07 and 18:07 every day = 04:07 and 10:07 UTC.
+    # The core price gate remains the final authority.
+    - cron: "7 4 * * *"
+    - cron: "7 10 * * *"
   workflow_dispatch:
     inputs:
       force_run:
