@@ -34,7 +34,7 @@ on:
         default: "12"
         type: string
       source_context:
-        description: "Read current source and representative history files into the LLM context"
+        description: "Read repository-wide text, source, licenses, and representative history into the LLM context"
         required: true
         default: false
         type: boolean
