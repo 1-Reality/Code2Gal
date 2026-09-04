@@ -112,19 +112,16 @@ jobs:
             exit 0
           fi
 
-          weekday="$(TZ=Asia/Shanghai date +%u)"
           hhmm="$(TZ=Asia/Shanghai date +%H%M)"
           now="$(TZ=Asia/Shanghai date '+%Y-%m-%d %H:%M:%S %Z')"
 
-          # DeepSeek V4 official off-peak whitelist, Beijing time.
-          # Weekends are deliberately excluded from unattended runs.
+          # DeepSeek V4 off-peak whitelist, Beijing time.
+          # Deliberately weekday-agnostic: the same clock windows apply every day.
           allowed=false
-          if (( weekday >= 1 && weekday <= 5 )); then
-            if (( 10#$hhmm < 900 )) ||
-               (( 10#$hhmm >= 1200 && 10#$hhmm < 1400 )) ||
-               (( 10#$hhmm >= 1800 )); then
-              allowed=true
-            fi
+          if (( 10#$hhmm < 900 )) ||
+             (( 10#$hhmm >= 1200 && 10#$hhmm < 1400 )) ||
+             (( 10#$hhmm >= 1800 )); then
+            allowed=true
           fi
 
           echo "allowed=$allowed" >> "$GITHUB_OUTPUT"
