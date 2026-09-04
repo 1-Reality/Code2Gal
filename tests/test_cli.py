@@ -65,6 +65,8 @@ def test_cli_maps_options_into_run_options(monkeypatch, tmp_path):
             "--reuse-backup",
             "--organization",
             "--threads", "7",
+            "--source-context",
+            "--source-history", "2",
             "--timeout", "60",
             "--script", str(script),
             "--output", str(output),
@@ -82,6 +84,8 @@ def test_cli_maps_options_into_run_options(monkeypatch, tmp_path):
     assert options.reuse_backup is True
     assert options.organization is True
     assert options.top_threads == 7
+    assert options.source_context is True
+    assert options.source_history == 2
     assert options.llm_timeout == 60
     assert options.script == script
     assert options.output_dir == output
