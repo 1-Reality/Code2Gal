@@ -19,6 +19,7 @@ from repo2gal.errors import PackageError  # noqa: E402
 from repo2gal.fetcher import (  # noqa: E402
     Contributor,
     RepoContext,
+    SourceSnapshot,
     Thread,
     context_from_backup,
     fetch_context,
@@ -26,7 +27,7 @@ from repo2gal.fetcher import (  # noqa: E402
     parse_repo,
     run_backup,
 )
-from repo2gal.generator import build_cast, render_context  # noqa: E402
+from repo2gal.generator import build_cast, build_prompt, render_context  # noqa: E402
 from repo2gal.packager import build_config, ensure_template, package  # noqa: E402
 
 
@@ -104,6 +105,47 @@ def test_render_context_truncates():
     ctx = make_ctx()
     ctx.readme_excerpt = "x" * 50000
     assert len(render_context(ctx, max_chars=1000)) < 1200
+
+
+def test_source_context_uses_source_first_prompt():
+    ctx = make_ctx()
+    ctx.source_snapshots = [
+        SourceSnapshot(path="new.user.js", role="current", content="const marker = 'SOURCE_MARKER';")
+    ]
+    prompt = build_prompt(ctx, build_cast(ctx))
+    assert "源码是第一证据" in prompt
+    assert "SOURCE_MARKER" in prompt
+
+
+def test_context_from_backup_source_mode_prefers_new_and_skips_temp(tmp_path):
+    backup = tmp_path / "repositories" / "widget"
+    source = backup / "repository"
+    (source / "history" / "temp").mkdir(parents=True)
+    (source / "history" / "历史大版本").mkdir(parents=True)
+    (source / "README.md").write_text("# Widget", encoding="utf-8")
+    (source / "old.user.js").write_text("// root-old\nconst rootOld = 1;", encoding="utf-8")
+    (source / "new.user.js").write_text("// current\nconst newest = 1;", encoding="utf-8")
+    (source / "history" / "temp" / "v999.user.js").write_text(
+        "// temp should never win\nconst temp = 1;", encoding="utf-8"
+    )
+    (source / "history" / "历史大版本" / "v5.user.js").write_text(
+        "// history-major\nconst history = 1;", encoding="utf-8"
+    )
+
+    ctx = context_from_backup(
+        "acme",
+        "widget",
+        backup,
+        top_threads=0,
+        source_context=True,
+        source_history=1,
+    )
+
+    assert [item.role for item in ctx.source_snapshots] == ["current", "history"]
+    assert ctx.source_snapshots[0].path == "new.user.js"
+    assert "newest" in ctx.source_snapshots[0].content
+    assert "temp" not in ctx.source_snapshots[1].path.lower()
+    assert ctx.source_snapshots[1].path == "history/历史大版本/v5.user.js"
 
 
 # --- python-github-backup 适配层 ---
