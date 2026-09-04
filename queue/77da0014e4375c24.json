@@ -1,0 +1,17 @@
+{
+  "request_id": "33842593512-1",
+  "queue_name": "default",
+  "task_id": "run-26-77da0014e4375c24",
+  "repository": "ucxn/Bro-Stat",
+  "model": "deepseek-v4-pro",
+  "base_url": "https://api.deepseek.com/v1",
+  "threads": "30",
+  "source_context": true,
+  "source_history": "2",
+  "performance": true,
+  "strict": false,
+  "strict_performance": false,
+  "dry_run": false,
+  "deploy_pages": true,
+  "code_ref": "full-text-context-lab"
+}
