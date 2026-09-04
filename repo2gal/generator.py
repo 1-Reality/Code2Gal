@@ -73,12 +73,13 @@ def render_context(
     ctx: RepoContext,
     *,
     max_chars: int = 14000,
-    source_max_chars: int = 230000,
+    source_max_chars: int = 620000,
 ) -> str:
     """把 RepoContext 渲染成给 LLM 读的文本。
 
-    默认仍是 Chronicle 模式；启用源码快照后，额外给模型一个独立源码窗口，
-    不拿源码去挤掉社区史料。源码窗口自身再做总量裁剪。
+    默认仍是 Chronicle 模式；启用仓库文本上下文后，额外给模型一个独立窗口，
+    包含 repository tree、当前源码、README/文档/配置、License 与少量历史源码。
+    这个窗口不挤掉社区史料，并单独做总量裁剪。
     """
     parts: list[str] = [
         f"## 仓库：{ctx.full_name}",
@@ -143,7 +144,7 @@ def render_context(
         source_parts.append(header + body)
         remaining -= len(header) + len(body)
         if len(body) < len(item.content):
-            source_parts.append("\n…（该源码快照已按总预算截断）")
+            source_parts.append("\n…（该仓库文本快照已按总预算截断）")
             break
     return "\n".join(source_parts)
 
