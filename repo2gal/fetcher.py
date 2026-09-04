@@ -69,7 +69,10 @@ class Contributor:
 
 @dataclass
 class SourceSnapshot:
-    """送入 LLM 的源码快照。role 仅区分当前版与历史参考版。"""
+    """送入 LLM 的仓库文本快照。
+
+    role 可区分 repository-tree/current-source/current-text/license/history。
+    """
 
     path: str
     role: str
@@ -509,32 +512,255 @@ def _detect_language(repo_dir: Path) -> str:
 
 
 SOURCE_EXTENSIONS = {
-    ".c", ".cc", ".cpp", ".cs", ".dart", ".go", ".h", ".hpp", ".java", ".js",
-    ".jsx", ".kt", ".kts", ".php", ".ps1", ".py", ".rb", ".rs", ".sh", ".svelte",
-    ".swift", ".ts", ".tsx", ".vue",
+    ".c", ".cc", ".cpp", ".cs", ".dart", ".ex", ".exs", ".fs", ".fsx", ".go", ".h", ".hpp",
+    ".java", ".js", ".jsx", ".kt", ".kts", ".lua", ".mjs", ".cjs", ".php", ".ps1", ".py",
+    ".r", ".rb", ".rs", ".scala", ".sh", ".sol", ".svelte", ".swift", ".ts", ".tsx", ".vb",
+    ".vue", ".zig",
 }
-SOURCE_SKIP_DIRS = {
-    ".git", ".github", "assets", "build", "dist", "node_modules", "target", "vendor",
-    "__pycache__",
+
+# 这些目录通常是依赖、构建产物或大体积资源，不属于“仓库作者写给人/机器读的文本”。
+# .github 故意不跳过，Workflow/Issue 模板本身也是项目结构的一部分。
+TEXT_SKIP_DIRS = {
+    ".git", "assets", "build", "coverage", "dist", "node_modules", "target", "vendor",
+    "__pycache__", ".cache",
 }
-CURRENT_SOURCE_LIMIT = 140_000
+
+# 机器生成、噪声极高的文本快照。文件名仍会出现在 repository-tree 中。
+TEXT_SKIP_NAMES = {
+    "package-lock.json", "pnpm-lock.yaml", "yarn.lock", "bun.lock", "bun.lockb",
+    "cargo.lock", "pubspec.lock", "poetry.lock", "pipfile.lock", "composer.lock",
+    "uv.lock", "go.sum",
+}
+
+BINARY_EXTENSIONS = {
+    ".7z", ".a", ".aab", ".apk", ".avi", ".bin", ".bmp", ".class", ".dat", ".db", ".dll",
+    ".dylib", ".exe", ".flac", ".gif", ".gz", ".ico", ".ipa", ".jar", ".jpeg", ".jpg",
+    ".m4a", ".mkv", ".mov", ".mp3", ".mp4", ".o", ".obj", ".ogg", ".otf", ".pdf", ".png",
+    ".rar", ".so", ".sqlite", ".sqlite3", ".tar", ".ttf", ".wav", ".webm", ".webp", ".woff",
+    ".woff2", ".xz", ".zip",
+}
+
+REPOSITORY_TREE_LIMIT = 40_000
+CURRENT_TEXT_TOTAL_LIMIT = 480_000
+CURRENT_SOURCE_FILE_LIMIT = 140_000
+CURRENT_TEXT_FILE_LIMIT = 120_000
 HISTORY_SOURCE_LIMIT = 80_000
+
+# GitHub/ChooseALicense 常见协议，以及实践中经常出现在 GitHub LICENSE 文件开头的标题。
+# 命中后只把协议名送进 LLM，避免把成千上万字的标准法律模板当成项目叙事素材。
+# 顺序很重要：AGPL/LGPL 必须先于 GPL。
+KNOWN_LICENSE_TITLES: tuple[tuple[str, tuple[str, ...]], ...] = (
+    ("GNU Affero General Public License v3.0", (
+        r"\bGNU AFFERO GENERAL PUBLIC LICENSE\b.{0,80}\bVERSION 3\b",
+    )),
+    ("GNU Lesser General Public License v3.0", (
+        r"\bGNU LESSER GENERAL PUBLIC LICENSE\b.{0,80}\bVERSION 3\b",
+    )),
+    ("GNU Lesser General Public License v2.1", (
+        r"\bGNU LESSER GENERAL PUBLIC LICENSE\b.{0,80}\bVERSION 2\.1\b",
+    )),
+    ("GNU General Public License v3.0", (
+        r"\bGNU GENERAL PUBLIC LICENSE\b.{0,80}\bVERSION 3\b",
+    )),
+    ("GNU General Public License v2.0", (
+        r"\bGNU GENERAL PUBLIC LICENSE\b.{0,80}\bVERSION 2\b",
+    )),
+    ("Apache License 2.0", (
+        r"\bAPACHE LICENSE\b.{0,80}\bVERSION 2\.0\b",
+        r"\bAPACHE LICENSE,?\s+VERSION 2\.0\b",
+    )),
+    ("Mozilla Public License 2.0", (
+        r"\bMOZILLA PUBLIC LICENSE\b.{0,80}\bVERSION 2\.0\b",
+    )),
+    ("Eclipse Public License 2.0", (
+        r"\bECLIPSE PUBLIC LICENSE\b.{0,80}\b(?:V|VERSION)\s*2\.0\b",
+    )),
+    ("Boost Software License 1.0", (
+        r"\bBOOST SOFTWARE LICENSE\b.{0,80}\bVERSION 1\.0\b",
+    )),
+    ("BSD 3-Clause License", (
+        r"\bBSD 3[- ]CLAUSE\b.*\bLICENSE\b",
+        r"\bBSD THREE[- ]CLAUSE\b.*\bLICENSE\b",
+    )),
+    ("BSD 2-Clause License", (
+        r"\bBSD 2[- ]CLAUSE\b.*\bLICENSE\b",
+        r"\bBSD TWO[- ]CLAUSE\b.*\bLICENSE\b",
+    )),
+    ("MIT License", (
+        r"(?m)^\s*MIT LICENSE\s*$",
+    )),
+    ("ISC License", (
+        r"(?m)^\s*ISC LICENSE\s*$",
+    )),
+    ("The Unlicense", (
+        r"(?m)^\s*(?:THE )?UNLICENSE\s*$",
+        r"\bTHIS IS FREE AND UNENCUMBERED SOFTWARE RELEASED INTO THE PUBLIC DOMAIN\b",
+    )),
+    ("Creative Commons Zero v1.0 Universal", (
+        r"\bCREATIVE COMMONS ZERO\b.{0,80}\b1\.0\b",
+        r"\bCC0 1\.0 UNIVERSAL\b",
+    )),
+    ("Creative Commons Attribution 4.0 International", (
+        r"\bCREATIVE COMMONS ATTRIBUTION 4\.0 INTERNATIONAL\b",
+        r"\bCC BY 4\.0\b",
+    )),
+    ("Creative Commons Attribution-ShareAlike 4.0 International", (
+        r"\bCREATIVE COMMONS ATTRIBUTION[- ]SHAREALIKE 4\.0 INTERNATIONAL\b",
+        r"\bCC BY-SA 4\.0\b",
+    )),
+    ("zlib License", (
+        r"(?m)^\s*ZLIB LICENSE\s*$",
+    )),
+    ("Artistic License 2.0", (
+        r"\bARTISTIC LICENSE\b.{0,80}\b2\.0\b",
+    )),
+    ("Academic Free License 3.0", (
+        r"\bACADEMIC FREE LICENSE\b.{0,80}\b3\.0\b",
+    )),
+    ("Open Software License 3.0", (
+        r"\bOPEN SOFTWARE LICENSE\b.{0,80}\b3\.0\b",
+    )),
+    ("Educational Community License 2.0", (
+        r"\bEDUCATIONAL COMMUNITY LICENSE\b.{0,80}\b2\.0\b",
+    )),
+    ("Microsoft Public License", (
+        r"\bMICROSOFT PUBLIC LICENSE\b",
+        r"\bMS-PL\b",
+    )),
+    ("Microsoft Reciprocal License", (
+        r"\bMICROSOFT RECIPROCAL LICENSE\b",
+        r"\bMS-RL\b",
+    )),
+    ("NCSA Open Source License", (
+        r"\bUNIVERSITY OF ILLINOIS/NCSA OPEN SOURCE LICENSE\b",
+        r"\bNCSA OPEN SOURCE LICENSE\b",
+    )),
+    ("PostgreSQL License", (
+        r"(?m)^\s*POSTGRESQL LICENSE\s*$",
+    )),
+    ("Python Software Foundation License 2.0", (
+        r"\bPYTHON SOFTWARE FOUNDATION LICENSE\b.{0,80}\bVERSION 2\b",
+    )),
+    ("Universal Permissive License 1.0", (
+        r"\bUNIVERSAL PERMISSIVE LICENSE\b.{0,80}\b1\.0\b",
+    )),
+    ("Common Development and Distribution License 1.0", (
+        r"\bCOMMON DEVELOPMENT AND DISTRIBUTION LICENSE\b.{0,80}\b1\.0\b",
+        r"\bCDDL\b.{0,40}\b1\.0\b",
+    )),
+    ("WTFPL", (
+        r"\bDO WHAT THE FUCK YOU WANT TO PUBLIC LICENSE\b",
+        r"(?m)^\s*WTFPL\s*$",
+    )),
+)
+
+
+def _truncate_text(text: str, limit: int, marker: str) -> str:
+    if len(text) <= limit:
+        return text
+    if limit <= len(marker) + 40:
+        return text[:limit]
+    available = limit - len(marker)
+    head = int(available * 0.75)
+    tail = available - head
+    return text[:head] + marker + text[-tail:]
+
+
+def _git_blob_bytes(repo_dir: Path, reference: str, relative: str) -> bytes:
+    if not (repo_dir / ".git").exists():
+        return b""
+    result = subprocess.run(
+        ["git", "-C", str(repo_dir), "show", f"{reference}:{relative}"],
+        capture_output=True,
+        check=False,
+    )
+    return result.stdout if result.returncode == 0 else b""
+
+
+def _decode_text_blob(data: bytes) -> str:
+    """保守识别 Git blob 是否为普通文本，不用扩展名猜 UTF-8 文档。"""
+    if not data:
+        return ""
+    if data.startswith((b"\xff\xfe", b"\xfe\xff")):
+        try:
+            return data.decode("utf-16")
+        except UnicodeDecodeError:
+            return ""
+    if b"\x00" in data[:16_384]:
+        return ""
+    try:
+        text = data.decode("utf-8-sig")
+    except UnicodeDecodeError:
+        return ""
+    sample = text[:16_384]
+    if sample:
+        controls = sum(
+            1 for ch in sample
+            if ord(ch) < 32 and ch not in "\n\r\t\f\b"
+        )
+        if controls / len(sample) > 0.01:
+            return ""
+    return text
+
+
+def _looks_like_license_path(relative: str) -> bool:
+    path = Path(relative)
+    stem = path.stem.casefold()
+    name = path.name.casefold()
+    if any(part.casefold() in {"license", "licenses", "licence", "licences"} for part in path.parts[:-1]):
+        return True
+    return (
+        stem.startswith(("license", "licence", "copying"))
+        or name in {"unlicense", "copyright"}
+    )
+
+
+def _known_license_title(text: str) -> str | None:
+    # 法律模板的协议名一定在开头附近；只扫描前 12 KiB，避免正文里的引用误命中。
+    head = text[:12_000]
+    compact = re.sub(r"[ \t]+", " ", head).upper()
+    for title, patterns in KNOWN_LICENSE_TITLES:
+        if any(re.search(pattern, compact, flags=re.S) for pattern in patterns):
+            return title
+    return None
+
+
+def _text_priority(relative: str) -> tuple[int, str]:
+    path = Path(relative)
+    low = relative.casefold()
+    name = path.name.casefold()
+    suffix = path.suffix.casefold()
+    score = 0
+
+    if len(path.parts) == 1:
+        score += 4_000
+    if name.startswith("readme"):
+        score += 40_000
+    if suffix in SOURCE_EXTENSIONS:
+        score += 30_000
+    if name.startswith(("contributing", "security", "changelog", "history", "architecture", "design")):
+        score += 18_000
+    if low.startswith(".github/"):
+        score += 12_000
+    if low.startswith(("docs/", "doc/")):
+        score += 10_000
+    if _looks_like_license_path(relative):
+        score += 8_000
+    if suffix in {".toml", ".yaml", ".yml", ".json", ".jsonc", ".ini", ".cfg", ".conf", ".xml"}:
+        score += 7_000
+    return score, relative
 
 
 def _read_source_snapshot(path: Path, *, limit: int) -> str:
-    """读取源码；超限时保留头尾，避免只留下 userscript header 而丢掉主体末端。"""
+    """兼容历史目录的文件系统读取；超限时保留头尾。"""
     try:
         text = path.read_text(encoding="utf-8")
     except (OSError, UnicodeDecodeError):
         return ""
-    if len(text) <= limit:
-        return text
-    head = int(limit * 0.75)
-    tail = limit - head
-    return (
-        text[:head]
-        + "\n\n/* … Repo2Gal source-context: middle truncated … */\n\n"
-        + text[-tail:]
+    return _truncate_text(
+        text,
+        limit,
+        "\n\n/* … Repo2Gal source-context: middle truncated … */\n\n",
     )
 
 
@@ -543,7 +769,7 @@ def _is_source_file(path: Path) -> bool:
 
 
 def _source_rank(path: Path, source_dir: Path, *, history: bool) -> tuple[int, int, str]:
-    """确定性排序。优先显式 latest/new 命名，再用目录语义和尺寸兜底。"""
+    """历史代表文件仍沿用单文件实验分支的确定性排序。"""
     rel = path.relative_to(source_dir).as_posix()
     low = rel.lower()
     name = path.name.lower()
@@ -559,8 +785,6 @@ def _source_rank(path: Path, source_dir: Path, *, history: bool) -> tuple[int, i
         score += 2_000
     if "/temp/" in f"/{low}/" or "/tmp/" in f"/{low}/":
         score -= 20_000
-
-    # 同一语义等级下更完整的源码优先，但不让单纯的大文件压过 new/latest。
     return score, min(path.stat().st_size, 2_000_000), rel
 
 
@@ -569,60 +793,108 @@ def _collect_source_snapshots(
     *,
     history_count: int = 1,
 ) -> list[SourceSnapshot]:
-    """抽取当前源码与少量历史源码。
+    """读取当前仓库中尽可能多的真实文本，并保留少量历史源码代表。
 
-    针对 userscript/单文件项目优先根目录 new.user.js；普通项目则从源码文件中
-    选最高优先级候选。history 只取少量代表版本，明确跳过 temp/tmp。
+    - repository-tree 总是先送入，模型至少知道完整文件布局；
+    - 当前分支按 Git tree 读取，不依赖可能陈旧的工作树；
+    - 常见标准 LICENSE 压缩成协议名，自编 LICENSE 保留全文；
+    - 二进制、依赖/构建目录、lockfile 不灌入正文，但仍会出现在树里；
+    - 当前文本总预算 480k，单文件另外限幅，避免一个巨型文件吞掉整个上下文。
     """
     source_dir = Path(source_dir)
     if not source_dir.is_dir():
         return []
 
-    current_candidates: list[Path] = []
+    reference, git_paths = _git_files(source_dir)
+    if not git_paths:
+        return []
+
+    tree_text = "\n".join(git_paths)
+    tree_text = _truncate_text(
+        tree_text,
+        REPOSITORY_TREE_LIMIT,
+        "\n…（repository tree 过长，已截断）\n",
+    )
+    snapshots: list[SourceSnapshot] = [
+        SourceSnapshot(path="(repository tree)", role="repository-tree", content=tree_text)
+    ]
+
+    candidates: list[str] = []
+    for relative in git_paths:
+        path = Path(relative)
+        parts = path.parts
+        if any(part in TEXT_SKIP_DIRS for part in parts[:-1]):
+            continue
+        if parts and parts[0].casefold() == "history":
+            continue
+        if path.name.casefold() in TEXT_SKIP_NAMES:
+            continue
+        if path.suffix.casefold() in BINARY_EXTENSIONS:
+            continue
+        if path.suffix.casefold() == ".map" or ".min." in path.name.casefold():
+            continue
+        candidates.append(relative)
+
+    candidates.sort(key=_text_priority, reverse=True)
+
+    remaining = CURRENT_TEXT_TOTAL_LIMIT
+    seen: set[str] = set()
+
+    for relative in candidates:
+        if remaining <= 0:
+            break
+        raw = _git_blob_bytes(source_dir, reference, relative)
+        text = _decode_text_blob(raw)
+        if not text:
+            continue
+
+        path = Path(relative)
+        role = "current-source" if path.suffix.casefold() in SOURCE_EXTENSIONS else "current-text"
+        if _looks_like_license_path(relative):
+            title = _known_license_title(text)
+            if title:
+                text = title
+                role = "license"
+            else:
+                role = "license-custom"
+
+        file_limit = (
+            CURRENT_SOURCE_FILE_LIMIT
+            if role == "current-source"
+            else CURRENT_TEXT_FILE_LIMIT
+        )
+        text = _truncate_text(
+            text,
+            min(file_limit, remaining),
+            "\n\n…（该仓库文本过长，中段已截断）\n\n",
+        )
+        if not text or text in seen:
+            continue
+        seen.add(text)
+        snapshots.append(
+            SourceSnapshot(path=relative, role=role, content=text)
+        )
+        remaining -= len(text)
+
+    # history 仍只取显式 history/ 目录中的少量源码代表，避免历史副本淹没当前仓库。
     history_candidates: list[Path] = []
     history_root = source_dir / "history"
-
-    for path in source_dir.rglob("*"):
-        if not _is_source_file(path):
-            continue
-        rel_parts = path.relative_to(source_dir).parts
-        if any(part in SOURCE_SKIP_DIRS for part in rel_parts[:-1]):
-            continue
-        if rel_parts and rel_parts[0] == "history":
+    if history_root.is_dir():
+        for path in history_root.rglob("*"):
+            if not _is_source_file(path):
+                continue
+            rel_parts = path.relative_to(source_dir).parts
             if any(part.lower() in {"temp", "tmp"} for part in rel_parts[1:-1]):
                 continue
             history_candidates.append(path)
-        else:
-            current_candidates.append(path)
-
-    current_candidates.sort(
-        key=lambda p: _source_rank(p, source_dir, history=False),
-        reverse=True,
-    )
     history_candidates.sort(
         key=lambda p: _source_rank(p, source_dir, history=True),
         reverse=True,
     )
 
-    snapshots: list[SourceSnapshot] = []
-    seen: set[str] = set()
-
-    # 单文件项目只取一个“当前主版本”，避免 new.user.js 与发布副本重复灌入。
-    if current_candidates:
-        path = current_candidates[0]
-        content = _read_source_snapshot(path, limit=CURRENT_SOURCE_LIMIT)
-        if content:
-            seen.add(content)
-            snapshots.append(
-                SourceSnapshot(
-                    path=path.relative_to(source_dir).as_posix(),
-                    role="current",
-                    content=content,
-                )
-            )
-
+    history_added = 0
     for path in history_candidates:
-        if len([s for s in snapshots if s.role == "history"]) >= max(0, history_count):
+        if history_added >= max(0, history_count):
             break
         content = _read_source_snapshot(path, limit=HISTORY_SOURCE_LIMIT)
         if not content or content in seen:
@@ -635,6 +907,7 @@ def _collect_source_snapshots(
                 content=content,
             )
         )
+        history_added += 1
 
     return snapshots
 
