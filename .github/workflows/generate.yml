@@ -8,6 +8,16 @@ on:
         required: true
         default: "1-Reality/Code2Gal"
         type: string
+      queue_name:
+        description: "Queue name. Same repo + same name replaces; different names can coexist."
+        required: true
+        default: "default"
+        type: string
+      run_now:
+        description: "Run immediately and ignore the DeepSeek off-peak gate"
+        required: true
+        default: false
+        type: boolean
       model:
         description: "OpenAI-compatible model name"
         required: true
@@ -60,321 +70,202 @@ on:
         type: boolean
 
 permissions:
-  contents: read
+  actions: read
+  contents: write
   issues: read
   pull-requests: read
   discussions: read
-
-concurrency:
-  group: repo2gal-generate-${{ github.ref }}
-  cancel-in-progress: false
+  pages: write
+  id-token: write
 
 jobs:
-  generate:
-    name: Generate WebGAL artifact
+  route:
+    name: Route generation request
     runs-on: ubuntu-latest
+    concurrency:
+      group: code2gal-generation-queue
+      cancel-in-progress: false
     outputs:
-      slug: ${{ steps.target.outputs.slug }}
-    timeout-minutes: 45
-    env:
-      GITHUB_TOKEN: ${{ secrets.REPO2GAL_GITHUB_TOKEN || github.token }}
-      REPO2GAL_API_KEY: ${{ secrets.REPO2GAL_API_KEY }}
-      REPO2GAL_BASE_URL: ${{ inputs.base_url }}
-      REPO2GAL_MODEL: ${{ inputs.model }}
+      execute: \${{ steps.route.outputs.execute }}
+      queue_file: \${{ steps.route.outputs.queue_file }}
+      request_id: \${{ steps.route.outputs.request_id }}
+      task_id: \${{ steps.route.outputs.task_id }}
 
     steps:
-      - name: Checkout Code2Gal
+      - name: Checkout generation queue
         uses: actions/checkout@v4
+        with:
+          ref: generation-queue
+          path: generation-queue
+          fetch-depth: 1
 
-      - name: Normalize target repository
-        id: target
+      - name: Route request
+        id: route
         shell: bash
         env:
-          TARGET_INPUT: ${{ inputs.repository }}
+          TARGET_INPUT: \${{ inputs.repository }}
+          QUEUE_NAME: \${{ inputs.queue_name }}
+          RUN_NOW: \${{ inputs.run_now }}
+          MODEL: \${{ inputs.model }}
+          BASE_URL: \${{ inputs.base_url }}
+          THREADS: \${{ inputs.threads }}
+          SOURCE_CONTEXT: \${{ inputs.source_context }}
+          SOURCE_HISTORY: \${{ inputs.source_history }}
+          PERFORMANCE: \${{ inputs.performance }}
+          STRICT: \${{ inputs.strict }}
+          STRICT_PERFORMANCE: \${{ inputs.strict_performance }}
+          DRY_RUN: \${{ inputs.dry_run }}
+          DEPLOY_PAGES: \${{ inputs.deploy_pages }}
+          CODE_REF: \${{ github.ref_name }}
         run: |
           set -euo pipefail
-          target="${TARGET_INPUT#https://github.com/}"
-          target="${target%.git}"
-          target="${target%/}"
 
+          target="\${TARGET_INPUT#https://github.com/}"
+          target="\${target%.git}"
+          target="\${target%/}"
           if [[ ! "$target" =~ ^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$ ]]; then
             echo "::error::Repository must look like owner/repo or https://github.com/owner/repo"
             exit 2
           fi
 
-          owner="${target%%/*}"
-          repo="${target#*/}"
-          slug="${owner}-${repo}"
+          name="$(printf '%s' "$QUEUE_NAME" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')"
+          [[ -n "$name" ]] || name="default"
 
-          echo "target=$target" >> "$GITHUB_OUTPUT"
-          echo "owner=$owner" >> "$GITHUB_OUTPUT"
-          echo "repo=$repo" >> "$GITHUB_OUTPUT"
-          echo "slug=$slug" >> "$GITHUB_OUTPUT"
+          request_id="\${GITHUB_RUN_ID}-\${GITHUB_RUN_ATTEMPT}"
+          key="$(printf '%s\n%s' "$target" "$name" | sha256sum | cut -c1-16)"
+          task_id="run-\${GITHUB_RUN_NUMBER}-\${key}"
+          queue_file=""
 
-      - name: Check credentials
-        shell: bash
-        env:
-          OPTIONAL_GITHUB_TOKEN: ${{ secrets.REPO2GAL_GITHUB_TOKEN }}
-          CURRENT_REPOSITORY: ${{ github.repository }}
-          TARGET_REPOSITORY: ${{ steps.target.outputs.target }}
-          DRY_RUN: ${{ inputs.dry_run }}
-        run: |
-          set -euo pipefail
-
-          if [[ "$DRY_RUN" != "true" && -z "${REPO2GAL_API_KEY:-}" ]]; then
-            echo "::error::Missing repository secret REPO2GAL_API_KEY. Add your DeepSeek/OpenAI-compatible API key in Settings > Secrets and variables > Actions."
-            exit 2
+          normalized_base="\${BASE_URL%/}"
+          is_deepseek=false
+          if [[ "$normalized_base" == "https://api.deepseek.com/v1" || "$normalized_base" == "https://api.deepseek.com" ]]; then
+            is_deepseek=true
           fi
 
-          if [[ -z "${OPTIONAL_GITHUB_TOKEN:-}" && "$TARGET_REPOSITORY" != "$CURRENT_REPOSITORY" ]]; then
-            echo "::warning::Using the workflow's built-in github.token for an external public repository. If GitHub GraphQL/Discussion access is rejected, add a classic/fine-grained PAT as REPO2GAL_GITHUB_TOKEN."
-          fi
+          execute=false
+          reason="queued"
 
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-          cache: pip
-          cache-dependency-path: pyproject.toml
-
-      - name: Install system dependency
-        shell: bash
-        run: |
-          sudo apt-get update
-          sudo apt-get install --yes libmagic1
-
-      - name: Install Code2Gal
-        shell: bash
-        run: |
-          python -m pip install --upgrade pip
-          python -m pip install .
-
-      - name: Restore WebGAL cache
-        uses: actions/cache@v4
-        with:
-          path: ~/.cache/repo2gal
-          key: ${{ runner.os }}-repo2gal-webgal-${{ hashFiles('repo2gal/packager.py') }}
-
-      - name: Restore incremental repository backup
-        uses: actions/cache@v4
-        with:
-          path: .repo2gal/backups/${{ steps.target.outputs.owner }}
-          key: ${{ runner.os }}-repo2gal-backup-${{ steps.target.outputs.slug }}-${{ github.run_id }}
-          restore-keys: |
-            ${{ runner.os }}-repo2gal-backup-${{ steps.target.outputs.slug }}-
-
-      - name: Validate built-in CC0 asset pack
-        if: ${{ !inputs.dry_run }}
-        shell: bash
-        run: repo2gal assets validate builtin:cc0-chronicle --public
-
-      - name: Prepare audit metadata
-        shell: bash
-        env:
-          TARGET_REPOSITORY: ${{ steps.target.outputs.target }}
-          MODEL: ${{ inputs.model }}
-          BASE_URL: ${{ inputs.base_url }}
-          THREADS: ${{ inputs.threads }}
-          SOURCE_CONTEXT: ${{ inputs.source_context }}
-          SOURCE_HISTORY: ${{ inputs.source_history }}
-          PERFORMANCE: ${{ inputs.performance }}
-          STRICT: ${{ inputs.strict }}
-          STRICT_PERFORMANCE: ${{ inputs.strict_performance }}
-          DRY_RUN: ${{ inputs.dry_run }}
-        run: |
-          set -euo pipefail
-          mkdir -p .repo2gal/audit
-          {
-            echo "target=$TARGET_REPOSITORY"
-            echo "model=$MODEL"
-            echo "base_url=$BASE_URL"
-            echo "threads=$THREADS"
-            echo "source_context=$SOURCE_CONTEXT"
-            echo "source_history=$SOURCE_HISTORY"
-            echo "performance=$PERFORMANCE"
-            echo "strict=$STRICT"
-            echo "strict_performance=$STRICT_PERFORMANCE"
-            echo "dry_run=$DRY_RUN"
-            echo "workflow_run=${GITHUB_RUN_ID}"
-            echo "source_sha=${GITHUB_SHA}"
-          } > .repo2gal/audit/run-info.txt
-
-      - name: Generate
-        id: generate
-        shell: bash
-        env:
-          TARGET_REPOSITORY: ${{ steps.target.outputs.target }}
-          OUTPUT_REPO: ${{ steps.target.outputs.repo }}
-          THREADS: ${{ inputs.threads }}
-          SOURCE_CONTEXT: ${{ inputs.source_context }}
-          SOURCE_HISTORY: ${{ inputs.source_history }}
-          PERFORMANCE: ${{ inputs.performance }}
-          STRICT: ${{ inputs.strict }}
-          STRICT_PERFORMANCE: ${{ inputs.strict_performance }}
-          DRY_RUN: ${{ inputs.dry_run }}
-        run: |
-          set -euo pipefail
-
-          args=(
-            "$TARGET_REPOSITORY"
-            --threads "$THREADS"
-            --save-prompt .repo2gal/audit/prompt.txt
-          )
-
-          if [[ "$SOURCE_CONTEXT" == "true" ]]; then
-            args+=(
-              --source-context
-              --source-history "$SOURCE_HISTORY"
-            )
-          fi
-
-          if [[ "$DRY_RUN" == "true" ]]; then
-            args+=(--dry-run)
+          if [[ "$RUN_NOW" == "true" || "$DRY_RUN" == "true" || "$is_deepseek" == "false" ]]; then
+            execute=true
+            reason="immediate"
           else
-            args+=(
-              --output "output/$OUTPUT_REPO"
-              --asset-pack builtin:cc0-chronicle
-              --public-assets
-            )
+            queue_file="queue/\${key}.json"
+            mkdir -p "generation-queue/queue"
 
-            if [[ "$PERFORMANCE" == "true" ]]; then
-              args+=(
-                --performance
-                --save-beat-manifest .repo2gal/audit/beat-manifest.json
-                --save-performance-plan .repo2gal/audit/performance-plan.json
-                --save-performance-report .repo2gal/audit/performance-report.json
-              )
-              if [[ "$STRICT_PERFORMANCE" == "true" ]]; then
-                args+=(--strict-performance)
+            jq -n \
+              --arg request_id "$request_id" \
+              --arg queue_name "$name" \
+              --arg task_id "$task_id" \
+              --arg repository "$target" \
+              --arg model "$MODEL" \
+              --arg base_url "$BASE_URL" \
+              --arg threads "$THREADS" \
+              --arg source_history "$SOURCE_HISTORY" \
+              --arg code_ref "$CODE_REF" \
+              --argjson source_context "$SOURCE_CONTEXT" \
+              --argjson performance "$PERFORMANCE" \
+              --argjson strict "$STRICT" \
+              --argjson strict_performance "$STRICT_PERFORMANCE" \
+              --argjson dry_run "$DRY_RUN" \
+              --argjson deploy_pages "$DEPLOY_PAGES" \
+              '{
+                request_id: $request_id,
+                queue_name: $queue_name,
+                task_id: $task_id,
+                repository: $repository,
+                model: $model,
+                base_url: $base_url,
+                threads: $threads,
+                source_context: $source_context,
+                source_history: $source_history,
+                performance: $performance,
+                strict: $strict,
+                strict_performance: $strict_performance,
+                dry_run: $dry_run,
+                deploy_pages: $deploy_pages,
+                code_ref: $code_ref
+              }' > "generation-queue/$queue_file"
+
+            weekday="$(TZ=Asia/Shanghai date +%u)"
+            hhmm="$(TZ=Asia/Shanghai date +%H%M)"
+            if (( weekday >= 1 && weekday <= 5 )); then
+              if (( 10#$hhmm < 900 )) ||
+                 (( 10#$hhmm >= 1200 && 10#$hhmm < 1400 )) ||
+                 (( 10#$hhmm >= 1800 )); then
+                execute=true
+                reason="off-peak-now"
               fi
             fi
-
-            if [[ "$STRICT" == "true" ]]; then
-              args+=(--strict)
-            fi
           fi
 
-          repo2gal "${args[@]}"
-
-      - name: Write run summary
-        if: always()
-        shell: bash
-        env:
-          TARGET_REPOSITORY: ${{ steps.target.outputs.target }}
-          OUTPUT_REPO: ${{ steps.target.outputs.repo }}
-          DRY_RUN: ${{ inputs.dry_run }}
-          GENERATE_OUTCOME: ${{ steps.generate.outcome }}
-        run: |
           {
-            echo "## Repo2Gal"
-            echo
-            printf '%s\n' "- Target: \`$TARGET_REPOSITORY\`"
-            printf '%s\n' "- Result: \`$GENERATE_OUTCOME\`"
-            printf '%s\n' "- Dry run: \`$DRY_RUN\`"
-            if [[ "$DRY_RUN" != "true" && -f "output/$OUTPUT_REPO/index.html" ]]; then
-              echo "- WebGAL site: included in the downloadable Actions artifact"
-            else
-              echo "- Prompt/audit files: included in the downloadable Actions artifact"
-            fi
-          } >> "$GITHUB_STEP_SUMMARY"
+            echo "execute=$execute"
+            echo "queue_file=$queue_file"
+            echo "request_id=$request_id"
+            echo "task_id=$task_id"
+          } >> "$GITHUB_OUTPUT"
 
-      - name: Upload WebGAL and audit files
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: repo2gal-${{ steps.target.outputs.slug }}-${{ github.run_number }}
-          path: |
-            output/${{ steps.target.outputs.repo }}/
-            .repo2gal/audit/
-          if-no-files-found: warn
-          retention-days: 30
-          compression-level: 6
+          echo "Route: $reason"
+          echo "Beijing time: $(TZ=Asia/Shanghai date '+%Y-%m-%d %H:%M:%S %Z')"
 
-  deploy:
-    name: Deploy WebGAL to GitHub Pages
-    if: ${{ !inputs.dry_run && inputs.deploy_pages }}
-    needs: generate
-    runs-on: ubuntu-latest
-    concurrency:
-      group: code2gal-pages-store
-      cancel-in-progress: false
-    permissions:
-      actions: read
-      contents: write
-      pages: write
-      id-token: write
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
-
-    steps:
-      - name: Checkout Code2Gal deployment tools
-        uses: actions/checkout@v4
-        with:
-          ref: main
-          path: code2gal
-
-      - name: Checkout persistent Pages store
-        uses: actions/checkout@v4
-        with:
-          ref: pages-store
-          path: pages-store
-          fetch-depth: 1
-
-      - name: Download generated WebGAL artifact
-        uses: actions/download-artifact@v8
-        with:
-          name: repo2gal-${{ needs.generate.outputs.slug }}-${{ github.run_number }}
-          path: artifact
-
-      - name: Locate generated WebGAL site
-        id: site
+      - name: Save queue entry
+        if: steps.route.outputs.queue_file != ''
         shell: bash
-        run: |
-          set -euo pipefail
-          mapfile -t indexes < <(find artifact/output -mindepth 2 -maxdepth 2 -type f -name index.html -print)
-          if [[ ${#indexes[@]} -ne 1 ]]; then
-            echo "::error::Expected exactly one WebGAL site under artifact/output, found ${#indexes[@]}."
-            printf '%s\n' "${indexes[@]}"
-            exit 2
-          fi
-          site_dir="$(dirname "${indexes[0]}")"
-          echo "path=$site_dir" >> "$GITHUB_OUTPUT"
-          echo "project=$(basename "$site_dir")" >> "$GITHUB_OUTPUT"
-
-      - name: Merge project into persistent Pages store
-        shell: bash
-        run: |
-          set -euo pipefail
-          python code2gal/tools/update_pages_store.py \
-            --site "${{ steps.site.outputs.path }}" \
-            --store pages-store \
-            --project "${{ steps.site.outputs.project }}"
-
-      - name: Save persistent Pages store
-        shell: bash
-        working-directory: pages-store
+        working-directory: generation-queue
         env:
-          PROJECT: ${{ steps.site.outputs.project }}
+          QUEUE_FILE: \${{ steps.route.outputs.queue_file }}
+          REQUEST_ID: \${{ steps.route.outputs.request_id }}
         run: |
           set -euo pipefail
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add -A
+          git add "$QUEUE_FILE"
 
           if git diff --cached --quiet; then
-            echo "Pages store already matches this project."
-          else
-            tree="$(git write-tree)"
-            commit="$(printf 'pages: publish %s\n' "$PROJECT" | git commit-tree "$tree")"
-            git push --force origin "$commit:pages-store"
+            echo "Queue entry unchanged."
+            exit 0
           fi
 
-      - name: Upload complete multi-project site for GitHub Pages
-        uses: actions/upload-pages-artifact@v3
-        with:
-          path: pages-store
+          git commit -m "queue: save $REQUEST_ID"
+          git push origin HEAD:generation-queue
 
-      - name: Deploy to GitHub Pages
-        id: deployment
-        uses: actions/deploy-pages@v4
+      - name: Write routing summary
+        if: always()
+        shell: bash
+        run: |
+          {
+            echo "## Repo2Gal routing"
+            echo
+            echo "- Run now: \`\${{ inputs.run_now }}\`"
+            echo "- Execute in this run: \`\${{ steps.route.outputs.execute }}\`"
+            echo "- Source context: \`\${{ inputs.source_context }}\`"
+            echo "- Source history files: \`\${{ inputs.source_history }}\`"
+            if [[ -n "\${{ steps.route.outputs.queue_file }}" ]]; then
+              echo "- Queue entry: \`\${{ steps.route.outputs.queue_file }}\`"
+            fi
+            echo "- Beijing time: \`$(TZ=Asia/Shanghai date '+%Y-%m-%d %H:%M:%S')\`"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  generate:
+    name: Generate now
+    needs: route
+    if: needs.route.outputs.execute == 'true'
+    uses: ./.github/workflows/generate-core.yml
+    with:
+      repository: \${{ inputs.repository }}
+      model: \${{ inputs.model }}
+      base_url: \${{ inputs.base_url }}
+      threads: \${{ inputs.threads }}
+      source_context: \${{ inputs.source_context }}
+      source_history: \${{ inputs.source_history }}
+      performance: \${{ inputs.performance }}
+      strict: \${{ inputs.strict }}
+      strict_performance: \${{ inputs.strict_performance }}
+      dry_run: \${{ inputs.dry_run }}
+      deploy_pages: \${{ inputs.deploy_pages }}
+      force_run: \${{ inputs.run_now || inputs.dry_run }}
+      queue_file: \${{ needs.route.outputs.queue_file }}
+      queue_request_id: \${{ needs.route.outputs.request_id }}
+      task_id: \${{ needs.route.outputs.task_id }}
+      code_ref: \${{ github.ref_name }}
+    secrets: inherit
