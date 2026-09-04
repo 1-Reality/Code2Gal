@@ -108,9 +108,9 @@ jobs:
         run: |
           set -euo pipefail
 
-          target="\${TARGET_INPUT#https://github.com/}"
-          target="\${target%.git}"
-          target="\${target%/}"
+          target="${TARGET_INPUT#https://github.com/}"
+          target="${target%.git}"
+          target="${target%/}"
           if [[ ! "$target" =~ ^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$ ]]; then
             echo "::error::Repository must look like owner/repo or https://github.com/owner/repo"
             exit 2
@@ -119,12 +119,12 @@ jobs:
           name="$(printf '%s' "$QUEUE_NAME" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')"
           [[ -n "$name" ]] || name="default"
 
-          request_id="\${GITHUB_RUN_ID}-\${GITHUB_RUN_ATTEMPT}"
+          request_id="${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
           key="$(printf '%s\n%s' "$target" "$name" | sha256sum | cut -c1-16)"
-          task_id="run-\${GITHUB_RUN_NUMBER}-\${key}"
+          task_id="run-${GITHUB_RUN_NUMBER}-${key}"
           queue_file=""
 
-          normalized_base="\${BASE_URL%/}"
+          normalized_base="${BASE_URL%/}"
           is_deepseek=false
           if [[ "$normalized_base" == "https://api.deepseek.com/v1" || "$normalized_base" == "https://api.deepseek.com" ]]; then
             is_deepseek=true
@@ -137,7 +137,7 @@ jobs:
             execute=true
             reason="immediate"
           else
-            queue_file="queue/\${key}.json"
+            queue_file="queue/${key}.json"
             mkdir -p "generation-queue/queue"
 
             jq -n \
