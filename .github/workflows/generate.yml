@@ -186,15 +186,12 @@ jobs:
                 code_ref: $code_ref
               }' > "generation-queue/$queue_file"
 
-            weekday="$(TZ=Asia/Shanghai date +%u)"
             hhmm="$(TZ=Asia/Shanghai date +%H%M)"
-            if (( weekday >= 1 && weekday <= 5 )); then
-              if (( 10#$hhmm < 900 )) ||
-                 (( 10#$hhmm >= 1200 && 10#$hhmm < 1400 )) ||
-                 (( 10#$hhmm >= 1800 )); then
-                execute=true
-                reason="off-peak-now"
-              fi
+            if (( 10#$hhmm < 900 )) ||
+               (( 10#$hhmm >= 1200 && 10#$hhmm < 1400 )) ||
+               (( 10#$hhmm >= 1800 )); then
+              execute=true
+              reason="off-peak-now"
             fi
           fi
 
