@@ -3,9 +3,10 @@ name: Run queued Repo2Gal
 on:
   schedule:
     # DeepSeek V4 off-peak boundaries, Beijing time:
-    # 12:07 and 18:07 Monday-Friday = 04:07 and 10:07 UTC.
-    - cron: "7 4 * * 1-5"
-    - cron: "7 10 * * 1-5"
+    # 12:07 and 18:07 every day = 04:07 and 10:07 UTC.
+    # The core price gate remains the final authority.
+    - cron: "7 4 * * *"
+    - cron: "7 10 * * *"
   workflow_dispatch:
     inputs:
       force_run:
