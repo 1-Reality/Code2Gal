@@ -420,8 +420,11 @@ jobs:
     concurrency:
       group: code2gal-pages-store
       cancel-in-progress: false
+    # Use a dedicated unprotected Pages environment so manual runs from
+    # experiment branches can publish directly. github-pages is commonly
+    # auto-protected to the default branch by GitHub Pages setup.
     environment:
-      name: github-pages
+      name: github-pages-direct
       url: ${{ steps.deployment.outputs.page_url }}
 
     steps:
