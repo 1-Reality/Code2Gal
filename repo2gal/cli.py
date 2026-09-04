@@ -54,6 +54,18 @@ def _die(msg: str, code: int) -> None:
 @click.option("--base-url", default=None, help="OpenAI 兼容端点，默认取 REPO2GAL_BASE_URL")
 @click.option("--threads", default=12, show_default=True, help="从全量备份中选入上下文的热门讨论数")
 @click.option(
+    "--source-context",
+    is_flag=True,
+    help="额外读取当前源码，并从 history 中选少量代表版本送入 LLM",
+)
+@click.option(
+    "--source-history",
+    default=1,
+    show_default=True,
+    type=click.IntRange(0, 3),
+    help="源码模式下从 history 选入的代表版本数",
+)
+@click.option(
     "--backup-dir",
     type=click.Path(),
     default=None,
@@ -94,6 +106,8 @@ def generate(
     model,
     base_url,
     threads,
+    source_context,
+    source_history,
     backup_dir,
     reuse_backup,
     organization,
@@ -132,6 +146,8 @@ def generate(
         reuse_backup=reuse_backup,
         organization=organization,
         top_threads=threads,
+        source_context=source_context,
+        source_history=source_history,
         token=resolve_github_token(),
         script=Path(script) if script else None,
         dry_run=dry_run,
