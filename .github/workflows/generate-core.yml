@@ -105,7 +105,7 @@ jobs:
             exit 0
           fi
 
-          normalized_base="\${BASE_URL%/}"
+          normalized_base="${BASE_URL%/}"
           if [[ "$normalized_base" != "https://api.deepseek.com/v1" && "$normalized_base" != "https://api.deepseek.com" ]]; then
             echo "allowed=true" >> "$GITHUB_OUTPUT"
             echo "reason=non-deepseek-provider" >> "$GITHUB_OUTPUT"
@@ -141,18 +141,18 @@ jobs:
           TARGET_INPUT: ${{ inputs.repository }}
         run: |
           set -euo pipefail
-          target="\${TARGET_INPUT#https://github.com/}"
-          target="\${target%.git}"
-          target="\${target%/}"
+          target="${TARGET_INPUT#https://github.com/}"
+          target="${target%.git}"
+          target="${target%/}"
 
           if [[ ! "$target" =~ ^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$ ]]; then
             echo "::error::Repository must look like owner/repo or https://github.com/owner/repo"
             exit 2
           fi
 
-          owner="\${target%%/*}"
-          repo="\${target#*/}"
-          slug="\${owner}-\${repo}"
+          owner="${target%%/*}"
+          repo="${target#*/}"
+          slug="${owner}-${repo}"
 
           echo "target=$target" >> "$GITHUB_OUTPUT"
           echo "owner=$owner" >> "$GITHUB_OUTPUT"
@@ -170,12 +170,12 @@ jobs:
         run: |
           set -euo pipefail
 
-          if [[ "$DRY_RUN" != "true" && -z "\${REPO2GAL_API_KEY:-}" ]]; then
+          if [[ "$DRY_RUN" != "true" && -z "${REPO2GAL_API_KEY:-}" ]]; then
             echo "::error::Missing repository secret REPO2GAL_API_KEY. Add your DeepSeek/OpenAI-compatible API key in Settings > Secrets and variables > Actions."
             exit 2
           fi
 
-          if [[ -z "\${OPTIONAL_GITHUB_TOKEN:-}" && "$TARGET_REPOSITORY" != "$CURRENT_REPOSITORY" ]]; then
+          if [[ -z "${OPTIONAL_GITHUB_TOKEN:-}" && "$TARGET_REPOSITORY" != "$CURRENT_REPOSITORY" ]]; then
             echo "::warning::Using the workflow's built-in github.token for an external public repository. If GitHub GraphQL/Discussion access is rejected, add a classic/fine-grained PAT as REPO2GAL_GITHUB_TOKEN."
           fi
 
@@ -252,7 +252,7 @@ jobs:
             echo "strict=$STRICT"
             echo "strict_performance=$STRICT_PERFORMANCE"
             echo "dry_run=$DRY_RUN"
-            echo "workflow_run=\${GITHUB_RUN_ID}"
+            echo "workflow_run=${GITHUB_RUN_ID}"
             echo "code_ref=$CODE_REF"
             echo "source_sha=$source_sha"
           } > .repo2gal/audit/run-info.txt
@@ -313,7 +313,7 @@ jobs:
             fi
           fi
 
-          repo2gal "\${args[@]}"
+          repo2gal "${args[@]}"
 
       - name: Mark generation success
         id: state
@@ -328,7 +328,7 @@ jobs:
         env:
           SLUG: ${{ steps.target.outputs.slug }}
           TASK_ID: ${{ inputs.task_id }}
-        run: echo "name=repo2gal-\${SLUG}-\${TASK_ID}" >> "$GITHUB_OUTPUT"
+        run: echo "name=repo2gal-${SLUG}-${TASK_ID}" >> "$GITHUB_OUTPUT"
 
       - name: Write run summary
         if: always()
@@ -450,12 +450,12 @@ jobs:
         run: |
           set -euo pipefail
           mapfile -t indexes < <(find artifact/output -mindepth 2 -maxdepth 2 -type f -name index.html -print)
-          if [[ \${#indexes[@]} -ne 1 ]]; then
-            echo "::error::Expected exactly one WebGAL site under artifact/output, found \${#indexes[@]}."
-            printf '%s\n' "\${indexes[@]}"
+          if [[ ${#indexes[@]} -ne 1 ]]; then
+            echo "::error::Expected exactly one WebGAL site under artifact/output, found ${#indexes[@]}."
+            printf '%s\n' "${indexes[@]}"
             exit 2
           fi
-          site_dir="$(dirname "\${indexes[0]}")"
+          site_dir="$(dirname "${indexes[0]}")"
           echo "path=$site_dir" >> "$GITHUB_OUTPUT"
           echo "project=$(basename "$site_dir")" >> "$GITHUB_OUTPUT"
 
