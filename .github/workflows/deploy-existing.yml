@@ -3,24 +3,20 @@ name: Deploy Existing WebGAL
 on:
   workflow_dispatch:
     inputs:
-      run_id:
-        description: "Generate Repo2Gal run ID containing the finished artifact"
+      generate_run:
+        description: "Generate Repo2Gal run number (#4 / 4), run ID, or full Actions URL"
         required: true
-        default: "33820007613"
-        type: string
-      artifact_name:
-        description: "Artifact name from that run"
-        required: true
-        default: "repo2gal-ucxn-ZTE-Stat_Max-4"
+        default: "4"
         type: string
 
 permissions:
   actions: read
+  contents: write
   pages: write
   id-token: write
 
 concurrency:
-  group: github-pages
+  group: code2gal-pages-store
   cancel-in-progress: false
 
 jobs:
@@ -32,14 +28,114 @@ jobs:
       url: ${{ steps.deployment.outputs.page_url }}
 
     steps:
+      - name: Resolve Generate Repo2Gal run
+        id: resolve
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          INPUT_RUN: ${{ inputs.generate_run }}
+          REPOSITORY: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+
+          value="$(printf '%s' "$INPUT_RUN" | tr -d '[:space:]')"
+          value="${value#\#}"
+
+          api() {
+            curl --fail-with-body --silent --show-error \
+              -H "Accept: application/vnd.github+json" \
+              -H "Authorization: Bearer $GH_TOKEN" \
+              -H "X-GitHub-Api-Version: 2022-11-28" \
+              "https://api.github.com/repos/$REPOSITORY/$1"
+          }
+
+          if [[ "$value" =~ ^https://github\.com/[^/]+/[^/]+/actions/runs/([0-9]+)(/.*)?$ ]]; then
+            run_id="${BASH_REMATCH[1]}"
+          elif [[ "$value" =~ ^[0-9]+$ ]]; then
+            # Human-friendly workflow run numbers are normally tiny, while
+            # GitHub's database run IDs are currently much larger. Prefer
+            # resolving as a Generate Repo2Gal run number; fall back to raw ID.
+            run_id=""
+            page=1
+            while [[ $page -le 10 && -z "$run_id" ]]; do
+              payload="$(api "actions/workflows/generate.yml/runs?event=workflow_dispatch&per_page=100&page=$page")"
+              run_id="$(jq -r --argjson n "$value" '
+                [.workflow_runs[] | select(.run_number == $n)][0].id // empty
+              ' <<<"$payload")"
+              count="$(jq '.workflow_runs | length' <<<"$payload")"
+              [[ "$count" -lt 100 ]] && break
+              page=$((page + 1))
+            done
+            [[ -n "$run_id" ]] || run_id="$value"
+          else
+            echo "::error::Enter a Generate Repo2Gal run number such as 4 or #4, a numeric run ID, or a full Actions run URL."
+            exit 2
+          fi
+
+          run="$(api "actions/runs/$run_id")"
+          workflow_path="$(jq -r '.path // ""' <<<"$run")"
+          conclusion="$(jq -r '.conclusion // ""' <<<"$run")"
+          run_number="$(jq -r '.run_number // ""' <<<"$run")"
+
+          if [[ "$workflow_path" != ".github/workflows/generate.yml" ]]; then
+            echo "::error::Run $run_id is not a Generate Repo2Gal run."
+            exit 2
+          fi
+          if [[ "$conclusion" != "success" ]]; then
+            echo "::error::Generate Repo2Gal #$run_number is not successful (conclusion: $conclusion)."
+            exit 2
+          fi
+
+          artifacts="$(api "actions/runs/$run_id/artifacts?per_page=100")"
+          mapfile -t artifact_rows < <(
+            jq -r '
+              .artifacts[]
+              | select(.expired == false)
+              | select(.name | startswith("repo2gal-"))
+              | [.id, .name] | @tsv
+            ' <<<"$artifacts"
+          )
+
+          if [[ ${#artifact_rows[@]} -ne 1 ]]; then
+            echo "::error::Expected exactly one non-expired repo2gal-* artifact in Generate Repo2Gal #$run_number; found ${#artifact_rows[@]}."
+            printf '%s\n' "${artifact_rows[@]}"
+            exit 2
+          fi
+
+          IFS=$'\t' read -r artifact_id artifact_name <<<"${artifact_rows[0]}"
+
+          {
+            echo "run_id=$run_id"
+            echo "run_number=$run_number"
+            echo "artifact_id=$artifact_id"
+            echo "artifact_name=$artifact_name"
+          } >> "$GITHUB_OUTPUT"
+
+          echo "Generate Repo2Gal #$run_number"
+          echo "Run ID: $run_id"
+          echo "Artifact: $artifact_name (#$artifact_id)"
+
+      - name: Checkout Code2Gal deployment tools
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          path: code2gal
+
+      - name: Checkout persistent Pages store
+        uses: actions/checkout@v4
+        with:
+          ref: pages-store
+          path: pages-store
+          fetch-depth: 1
+
       - name: Download generated artifact
         uses: actions/download-artifact@v8
         with:
-          name: ${{ inputs.artifact_name }}
+          artifact-ids: ${{ steps.resolve.outputs.artifact_id }}
           path: artifact
           github-token: ${{ github.token }}
           repository: ${{ github.repository }}
-          run-id: ${{ inputs.run_id }}
+          run-id: ${{ steps.resolve.outputs.run_id }}
 
       - name: Locate WebGAL site
         id: site
@@ -58,11 +154,60 @@ jobs:
           echo "path=$site_dir" >> "$GITHUB_OUTPUT"
           echo "Found WebGAL site: $site_dir"
 
-      - name: Upload site for GitHub Pages
+      - name: Merge project into persistent Pages store
+        id: merge
+        shell: bash
+        env:
+          SITE_DIR: ${{ steps.site.outputs.path }}
+        run: |
+          set -euo pipefail
+          project="$(basename "$SITE_DIR")"
+          python code2gal/tools/update_pages_store.py \
+            --site "$SITE_DIR" \
+            --store pages-store \
+            --project "$project"
+          echo "project=$project" >> "$GITHUB_OUTPUT"
+
+      - name: Save persistent Pages store
+        shell: bash
+        working-directory: pages-store
+        env:
+          PROJECT: ${{ steps.merge.outputs.project }}
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+
+          if git diff --cached --quiet; then
+            echo "Pages store already matches this project."
+            exit 0
+          fi
+
+          tree="$(git write-tree)"
+          commit="$(printf 'pages: publish %s\n' "$PROJECT" | git commit-tree "$tree")"
+          git push --force origin "$commit:pages-store"
+
+      - name: Upload complete multi-project site for GitHub Pages
         uses: actions/upload-pages-artifact@v3
         with:
-          path: ${{ steps.site.outputs.path }}
+          path: pages-store
 
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v4
+
+      - name: Write deployment summary
+        if: always()
+        shell: bash
+        run: |
+          {
+            echo "## WebGAL Pages deployment"
+            echo
+            echo "- Source run: Generate Repo2Gal #${{ steps.resolve.outputs.run_number }}"
+            echo "- Artifact: \`${{ steps.resolve.outputs.artifact_name }}\`"
+            echo "- Project path: \`/${{ steps.merge.outputs.project }}/\`"
+            if [[ -n "${{ steps.deployment.outputs.page_url }}" ]]; then
+              echo "- Pages: ${{ steps.deployment.outputs.page_url }}"
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
