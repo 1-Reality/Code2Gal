@@ -1,0 +1,89 @@
+name: Run queued Repo2Gal
+
+on:
+  schedule:
+    # DeepSeek V4 off-peak boundaries, Beijing time:
+    # 12:07 and 18:07 Monday-Friday = 04:07 and 10:07 UTC.
+    - cron: "7 4 * * 1-5"
+    - cron: "7 10 * * 1-5"
+  workflow_dispatch:
+    inputs:
+      force_run:
+        description: "Drain the queue immediately, ignoring the DeepSeek off-peak gate"
+        required: true
+        default: false
+        type: boolean
+
+permissions:
+  actions: read
+  contents: write
+  issues: read
+  pull-requests: read
+  discussions: read
+  pages: write
+  id-token: write
+
+jobs:
+  load:
+    name: Load generation queue
+    runs-on: ubuntu-latest
+    outputs:
+      count: \${{ steps.queue.outputs.count }}
+      matrix: \${{ steps.queue.outputs.matrix }}
+
+    steps:
+      - name: Checkout generation queue
+        uses: actions/checkout@v4
+        with:
+          ref: generation-queue
+          path: generation-queue
+          fetch-depth: 1
+
+      - name: Build queue matrix
+        id: queue
+        shell: bash
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          files=(generation-queue/queue/*.json)
+          requests='[]'
+
+          for file in "\${files[@]}"; do
+            rel="\${file#generation-queue/}"
+            item="$(jq -c --arg queue_file "$rel" '. + {queue_file: $queue_file}' "$file")"
+            requests="$(jq -c --argjson item "$item" '. + [$item]' <<<"$requests")"
+          done
+
+          count="$(jq 'length' <<<"$requests")"
+          echo "count=$count" >> "$GITHUB_OUTPUT"
+          echo "matrix=$requests" >> "$GITHUB_OUTPUT"
+          echo "Queued requests: $count"
+
+  generate:
+    name: Run queued request
+    needs: load
+    if: needs.load.outputs.count != '0'
+    strategy:
+      fail-fast: false
+      max-parallel: 1
+      matrix:
+        request: \${{ fromJSON(needs.load.outputs.matrix) }}
+    uses: ./.github/workflows/generate-core.yml
+    with:
+      repository: \${{ matrix.request.repository }}
+      model: \${{ matrix.request.model }}
+      base_url: \${{ matrix.request.base_url }}
+      threads: \${{ matrix.request.threads }}
+      source_context: \${{ matrix.request.source_context }}
+      source_history: \${{ matrix.request.source_history }}
+      performance: \${{ matrix.request.performance }}
+      strict: \${{ matrix.request.strict }}
+      strict_performance: \${{ matrix.request.strict_performance }}
+      dry_run: \${{ matrix.request.dry_run }}
+      deploy_pages: \${{ matrix.request.deploy_pages }}
+      force_run: \${{ github.event_name == 'workflow_dispatch' && inputs.force_run }}
+      queue_file: \${{ matrix.request.queue_file }}
+      queue_request_id: \${{ matrix.request.request_id }}
+      task_id: \${{ matrix.request.task_id }}
+      code_ref: \${{ matrix.request.code_ref }}
+    secrets: inherit
