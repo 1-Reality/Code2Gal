@@ -73,7 +73,7 @@ def render_context(
     ctx: RepoContext,
     *,
     max_chars: int = 14000,
-    source_max_chars: int = 22000,
+    source_max_chars: int = 230000,
 ) -> str:
     """把 RepoContext 渲染成给 LLM 读的文本。
 
@@ -156,7 +156,8 @@ def build_prompt(
     figures: list[str] | None = None,
     bgm: list[str] | None = None,
 ) -> str:
-    template = (PROMPT_DIR / "chronicle.md").read_text(encoding="utf-8")
+    template_name = "source_chronicle.md" if ctx.source_snapshots else "chronicle.md"
+    template = (PROMPT_DIR / template_name).read_text(encoding="utf-8")
     background_names = DEFAULT_BACKGROUNDS if backgrounds is None else backgrounds
     bgm_names = DEFAULT_BGM if bgm is None else bgm
     return (
