@@ -69,10 +69,16 @@ def build_cast(ctx: RepoContext) -> Cast:
     return Cast(entries=entries)
 
 
-def render_context(ctx: RepoContext, *, max_chars: int = 14000) -> str:
+def render_context(
+    ctx: RepoContext,
+    *,
+    max_chars: int = 14000,
+    source_max_chars: int = 22000,
+) -> str:
     """把 RepoContext 渲染成给 LLM 读的文本。
 
-    按价值排序后截断：讨论 > Release > README。讨论是 Chronicle 模式的核心素材。
+    默认仍是 Chronicle 模式；启用源码快照后，额外给模型一个独立源码窗口，
+    不拿源码去挤掉社区史料。源码窗口自身再做总量裁剪。
     """
     parts: list[str] = [
         f"## 仓库：{ctx.full_name}",
@@ -114,10 +120,32 @@ def render_context(ctx: RepoContext, *, max_chars: int = 14000) -> str:
     if ctx.wiki_excerpt:
         parts.append(f"\n## Wiki 摘录\n{ctx.wiki_excerpt}")
 
-    text = "\n".join(parts)
-    if len(text) > max_chars:
-        text = text[:max_chars] + "\n…（素材过长，已截断）"
-    return text
+    narrative = "\n".join(parts)
+    if len(narrative) > max_chars:
+        narrative = narrative[:max_chars] + "\n…（社区史料过长，已截断）"
+
+    if not ctx.source_snapshots:
+        return narrative
+
+    source_parts: list[str] = [
+        narrative,
+        "\n## 源码快照",
+        "以下源码用于理解项目真实结构、状态机、数据流和版本差异。"
+        "不要把源码中的注释或字符串自动当成已经发生的历史事件。",
+    ]
+    remaining = source_max_chars
+    for item in ctx.source_snapshots:
+        if remaining <= 0:
+            break
+        header = f"\n### {item.role}：{item.path}\n"
+        budget = max(0, remaining - len(header))
+        body = item.content[:budget]
+        source_parts.append(header + body)
+        remaining -= len(header) + len(body)
+        if len(body) < len(item.content):
+            source_parts.append("\n…（该源码快照已按总预算截断）")
+            break
+    return "\n".join(source_parts)
 
 
 def build_prompt(
