@@ -23,6 +23,16 @@ on:
         required: true
         default: "12"
         type: string
+      source_context:
+        description: "Read current source and representative history files into the LLM context"
+        required: true
+        default: false
+        type: boolean
+      source_history:
+        description: "Representative history source files to include (0-3)"
+        required: true
+        default: "1"
+        type: string
       performance:
         description: "Enable the second LLM pass for dynamic performance"
         required: true
@@ -163,6 +173,8 @@ jobs:
           MODEL: ${{ inputs.model }}
           BASE_URL: ${{ inputs.base_url }}
           THREADS: ${{ inputs.threads }}
+          SOURCE_CONTEXT: ${{ inputs.source_context }}
+          SOURCE_HISTORY: ${{ inputs.source_history }}
           PERFORMANCE: ${{ inputs.performance }}
           STRICT: ${{ inputs.strict }}
           STRICT_PERFORMANCE: ${{ inputs.strict_performance }}
@@ -175,6 +187,8 @@ jobs:
             echo "model=$MODEL"
             echo "base_url=$BASE_URL"
             echo "threads=$THREADS"
+            echo "source_context=$SOURCE_CONTEXT"
+            echo "source_history=$SOURCE_HISTORY"
             echo "performance=$PERFORMANCE"
             echo "strict=$STRICT"
             echo "strict_performance=$STRICT_PERFORMANCE"
@@ -190,6 +204,8 @@ jobs:
           TARGET_REPOSITORY: ${{ steps.target.outputs.target }}
           OUTPUT_REPO: ${{ steps.target.outputs.repo }}
           THREADS: ${{ inputs.threads }}
+          SOURCE_CONTEXT: ${{ inputs.source_context }}
+          SOURCE_HISTORY: ${{ inputs.source_history }}
           PERFORMANCE: ${{ inputs.performance }}
           STRICT: ${{ inputs.strict }}
           STRICT_PERFORMANCE: ${{ inputs.strict_performance }}
@@ -202,6 +218,13 @@ jobs:
             --threads "$THREADS"
             --save-prompt .repo2gal/audit/prompt.txt
           )
+
+          if [[ "$SOURCE_CONTEXT" == "true" ]]; then
+            args+=(
+              --source-context
+              --source-history "$SOURCE_HISTORY"
+            )
+          fi
 
           if [[ "$DRY_RUN" == "true" ]]; then
             args+=(--dry-run)
