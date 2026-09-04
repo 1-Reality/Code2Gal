@@ -76,10 +76,10 @@ jobs:
       group: code2gal-generation-queue
       cancel-in-progress: false
     outputs:
-      execute: \${{ steps.route.outputs.execute }}
-      queue_file: \${{ steps.route.outputs.queue_file }}
-      request_id: \${{ steps.route.outputs.request_id }}
-      task_id: \${{ steps.route.outputs.task_id }}
+      execute: ${{ steps.route.outputs.execute }}
+      queue_file: ${{ steps.route.outputs.queue_file }}
+      request_id: ${{ steps.route.outputs.request_id }}
+      task_id: ${{ steps.route.outputs.task_id }}
 
     steps:
       - name: Checkout generation queue
@@ -93,18 +93,18 @@ jobs:
         id: route
         shell: bash
         env:
-          TARGET_INPUT: \${{ inputs.repository }}
-          QUEUE_NAME: \${{ inputs.queue_name }}
-          RUN_NOW: \${{ inputs.run_now }}
-          MODEL: \${{ inputs.model }}
-          BASE_URL: \${{ inputs.base_url }}
-          THREADS: \${{ inputs.threads }}
-          PERFORMANCE: \${{ inputs.performance }}
-          STRICT: \${{ inputs.strict }}
-          STRICT_PERFORMANCE: \${{ inputs.strict_performance }}
-          DRY_RUN: \${{ inputs.dry_run }}
-          DEPLOY_PAGES: \${{ inputs.deploy_pages }}
-          CODE_REF: \${{ github.ref_name }}
+          TARGET_INPUT: ${{ inputs.repository }}
+          QUEUE_NAME: ${{ inputs.queue_name }}
+          RUN_NOW: ${{ inputs.run_now }}
+          MODEL: ${{ inputs.model }}
+          BASE_URL: ${{ inputs.base_url }}
+          THREADS: ${{ inputs.threads }}
+          PERFORMANCE: ${{ inputs.performance }}
+          STRICT: ${{ inputs.strict }}
+          STRICT_PERFORMANCE: ${{ inputs.strict_performance }}
+          DRY_RUN: ${{ inputs.dry_run }}
+          DEPLOY_PAGES: ${{ inputs.deploy_pages }}
+          CODE_REF: ${{ github.ref_name }}
         run: |
           set -euo pipefail
 
@@ -198,8 +198,8 @@ jobs:
         shell: bash
         working-directory: generation-queue
         env:
-          QUEUE_FILE: \${{ steps.route.outputs.queue_file }}
-          REQUEST_ID: \${{ steps.route.outputs.request_id }}
+          QUEUE_FILE: ${{ steps.route.outputs.queue_file }}
+          REQUEST_ID: ${{ steps.route.outputs.request_id }}
         run: |
           set -euo pipefail
           git config user.name "github-actions[bot]"
@@ -221,10 +221,10 @@ jobs:
           {
             echo "## Repo2Gal routing"
             echo
-            echo "- Run now: \`\${{ inputs.run_now }}\`"
-            echo "- Execute in this run: \`\${{ steps.route.outputs.execute }}\`"
-            if [[ -n "\${{ steps.route.outputs.queue_file }}" ]]; then
-              echo "- Queue entry: \`\${{ steps.route.outputs.queue_file }}\`"
+            echo "- Run now: \`${{ inputs.run_now }}\`"
+            echo "- Execute in this run: \`${{ steps.route.outputs.execute }}\`"
+            if [[ -n "${{ steps.route.outputs.queue_file }}" ]]; then
+              echo "- Queue entry: \`${{ steps.route.outputs.queue_file }}\`"
             fi
             echo "- Beijing time: \`$(TZ=Asia/Shanghai date '+%Y-%m-%d %H:%M:%S')\`"
           } >> "$GITHUB_STEP_SUMMARY"
@@ -235,20 +235,20 @@ jobs:
     if: needs.route.outputs.execute == 'true'
     uses: ./.github/workflows/generate-core.yml
     with:
-      repository: \${{ inputs.repository }}
-      model: \${{ inputs.model }}
-      base_url: \${{ inputs.base_url }}
-      threads: \${{ inputs.threads }}
+      repository: ${{ inputs.repository }}
+      model: ${{ inputs.model }}
+      base_url: ${{ inputs.base_url }}
+      threads: ${{ inputs.threads }}
       source_context: false
       source_history: "1"
-      performance: \${{ inputs.performance }}
-      strict: \${{ inputs.strict }}
-      strict_performance: \${{ inputs.strict_performance }}
-      dry_run: \${{ inputs.dry_run }}
-      deploy_pages: \${{ inputs.deploy_pages }}
-      force_run: \${{ inputs.run_now || inputs.dry_run }}
-      queue_file: \${{ needs.route.outputs.queue_file }}
-      queue_request_id: \${{ needs.route.outputs.request_id }}
-      task_id: \${{ needs.route.outputs.task_id }}
-      code_ref: \${{ github.ref_name }}
+      performance: ${{ inputs.performance }}
+      strict: ${{ inputs.strict }}
+      strict_performance: ${{ inputs.strict_performance }}
+      dry_run: ${{ inputs.dry_run }}
+      deploy_pages: ${{ inputs.deploy_pages }}
+      force_run: ${{ inputs.run_now || inputs.dry_run }}
+      queue_file: ${{ needs.route.outputs.queue_file }}
+      queue_request_id: ${{ needs.route.outputs.request_id }}
+      task_id: ${{ needs.route.outputs.task_id }}
+      code_ref: ${{ github.ref_name }}
     secrets: inherit
