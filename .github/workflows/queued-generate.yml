@@ -29,8 +29,8 @@ jobs:
     name: Load generation queue
     runs-on: ubuntu-latest
     outputs:
-      count: \${{ steps.queue.outputs.count }}
-      matrix: \${{ steps.queue.outputs.matrix }}
+      count: ${{ steps.queue.outputs.count }}
+      matrix: ${{ steps.queue.outputs.matrix }}
 
     steps:
       - name: Checkout generation queue
@@ -68,23 +68,23 @@ jobs:
       fail-fast: false
       max-parallel: 1
       matrix:
-        request: \${{ fromJSON(needs.load.outputs.matrix) }}
+        request: ${{ fromJSON(needs.load.outputs.matrix) }}
     uses: ./.github/workflows/generate-core.yml
     with:
-      repository: \${{ matrix.request.repository }}
-      model: \${{ matrix.request.model }}
-      base_url: \${{ matrix.request.base_url }}
-      threads: \${{ matrix.request.threads }}
-      source_context: \${{ matrix.request.source_context }}
-      source_history: \${{ matrix.request.source_history }}
-      performance: \${{ matrix.request.performance }}
-      strict: \${{ matrix.request.strict }}
-      strict_performance: \${{ matrix.request.strict_performance }}
-      dry_run: \${{ matrix.request.dry_run }}
-      deploy_pages: \${{ matrix.request.deploy_pages }}
-      force_run: \${{ github.event_name == 'workflow_dispatch' && inputs.force_run }}
-      queue_file: \${{ matrix.request.queue_file }}
-      queue_request_id: \${{ matrix.request.request_id }}
-      task_id: \${{ matrix.request.task_id }}
-      code_ref: \${{ matrix.request.code_ref }}
+      repository: ${{ matrix.request.repository }}
+      model: ${{ matrix.request.model }}
+      base_url: ${{ matrix.request.base_url }}
+      threads: ${{ matrix.request.threads }}
+      source_context: ${{ matrix.request.source_context }}
+      source_history: ${{ matrix.request.source_history }}
+      performance: ${{ matrix.request.performance }}
+      strict: ${{ matrix.request.strict }}
+      strict_performance: ${{ matrix.request.strict_performance }}
+      dry_run: ${{ matrix.request.dry_run }}
+      deploy_pages: ${{ matrix.request.deploy_pages }}
+      force_run: ${{ github.event_name == 'workflow_dispatch' && inputs.force_run }}
+      queue_file: ${{ matrix.request.queue_file }}
+      queue_request_id: ${{ matrix.request.request_id }}
+      task_id: ${{ matrix.request.task_id }}
+      code_ref: ${{ matrix.request.code_ref }}
     secrets: inherit
