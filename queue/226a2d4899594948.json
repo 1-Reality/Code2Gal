@@ -1,0 +1,17 @@
+{
+  "request_id": "33838002407-1",
+  "queue_name": "default",
+  "task_id": "run-18-226a2d4899594948",
+  "repository": "ucxn/Ban-PCDN_Anti-P2P",
+  "model": "deepseek-v4-pro",
+  "base_url": "https://api.deepseek.com/v1",
+  "threads": "30",
+  "source_context": true,
+  "source_history": "1",
+  "performance": true,
+  "strict": false,
+  "strict_performance": false,
+  "dry_run": false,
+  "deploy_pages": true,
+  "code_ref": "full-text-context-lab"
+}
