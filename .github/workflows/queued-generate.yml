@@ -49,8 +49,8 @@ jobs:
           files=(generation-queue/queue/*.json)
           requests='[]'
 
-          for file in "\${files[@]}"; do
-            rel="\${file#generation-queue/}"
+          for file in "${files[@]}"; do
+            rel="${file#generation-queue/}"
             item="$(jq -c --arg queue_file "$rel" '. + {queue_file: $queue_file}' "$file")"
             requests="$(jq -c --argjson item "$item" '. + [$item]' <<<"$requests")"
           done
