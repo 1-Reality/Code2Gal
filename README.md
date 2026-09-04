@@ -1,21 +1,17 @@
 # Repo2Gal
 
-把 GitHub 仓库转换为基于 [WebGAL](https://github.com/OpenWebGAL/WebGAL) 的可游玩开源项目文档。
+把 GitHub 项目转换为基于 [WebGAL](https://github.com/OpenWebGAL/WebGAL) 的可游玩开源项目文档。
 
 [![License: GPL-3.0](https://img.shields.io/badge/License-GPL--3.0-blue.svg)](LICENSE)
-[![Python 3.10+](https://img.shields.io/badge/Python-3.10%2B-blue.svg)](https://www.python.org/)
 
-输入一个 GitHub 仓库地址，输出一个静态网站：以视觉小说（编年史）的形式讲述该项目的
-真实历史——它为何诞生、经历过哪些争论、社区如何演变。剧情素材全部来自仓库的真实
+输入一个 GitHub 存储库地址，输出一个静态网站：以视觉小说（编年史）的形式讲述该项目的
+真实历史——它为何诞生、经历过哪些争论、社区如何演变。剧情素材全部来自该库的真实
 源码、README、Issue、PR、Discussion、wiki 与 Release。
 
-当前版本：v0.5.0（版本历史见 [CHANGELOG.md](CHANGELOG.md)）。项目版本严格遵循
-[Semantic Versioning 2.0.0](https://semver.org/)，具体升级和同步规则见
-[CONTRIBUTING.md](CONTRIBUTING.md#版本管理)。
 
 ## 演示
 
-在线演示使用本仓库自身数据生成，部署于 Vercel（部署方式见
+在线演示使用上游仓库自身数据生成，部署于 Vercel（部署方式见
 [docs/dev/deployment.md](docs/dev/deployment.md)）：
 
 https://repo2gal.rhopaper.top/demo
