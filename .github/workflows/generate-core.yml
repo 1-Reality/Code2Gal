@@ -203,14 +203,14 @@ jobs:
 
       - name: Restore WebGAL cache
         if: steps.price_gate.outputs.allowed == 'true'
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: ~/.cache/repo2gal
           key: ${{ runner.os }}-repo2gal-webgal-${{ hashFiles('repo2gal/packager.py') }}
 
       - name: Restore incremental repository backup
         if: steps.price_gate.outputs.allowed == 'true'
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: .repo2gal/backups/${{ steps.target.outputs.owner }}
           key: ${{ runner.os }}-repo2gal-backup-${{ steps.target.outputs.slug }}-${{ github.run_id }}-${{ inputs.task_id }}
