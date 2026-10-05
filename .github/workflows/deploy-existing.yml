@@ -190,7 +190,7 @@ jobs:
           git push --force origin "$commit:pages-store"
 
       - name: Upload complete multi-project site for GitHub Pages
-        uses: actions/upload-pages-artifact@v3
+        uses: actions/upload-pages-artifact@v5
         with:
           path: pages-store
 
