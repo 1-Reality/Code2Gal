@@ -1,0 +1,18 @@
+{
+  "request_id": "38053146861-1",
+  "queue_name": "default",
+  "mode": "chronicle",
+  "task_id": "run-37-27f49f841481e14d",
+  "repository": "ucxn/bili.libre.speed",
+  "model": "deepseek-v4-pro",
+  "base_url": "https://api.deepseek.com/v1",
+  "threads": "12",
+  "source_context": false,
+  "source_history": "1",
+  "performance": true,
+  "strict": false,
+  "strict_performance": false,
+  "dry_run": false,
+  "deploy_pages": true,
+  "code_ref": "upstream-features"
+}
