@@ -28,10 +28,8 @@ GAME_MODE_TITLES = {
     "quickstart": "贡献者上手",
 }
 
-# 不使用旁白的模式：全部台词都必须由角色亲口说出。
-# Overview 自 v0.6.2 起如此（WebGAL 4.6.2 会把无说话人的文本渲染成上一句 speaker）；
-# Quick Start 与之同构——带新人上手的维护者全程说话，不靠旁白解说。
-NARRATION_FREE_MODES = ("overview", "quickstart")
+# 所有模式都允许旁白。
+NARRATION_FREE_MODES = ()
 
 # WebGAL 发行版自带的兼容默认素材；使用 Asset Pack 时仍与包内资源并存。
 DEFAULT_BACKGROUNDS = ["bg.webp", "WebGalEnter.webp", "WebGAL_New_Enter_Image.webp"]
