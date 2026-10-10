@@ -832,8 +832,7 @@ def context_from_backup(
         threads.sort(key=lambda item: (item.comment_count, item.created_at), reverse=True)
         threads = threads[:top_threads]
     elif mode == "quickstart":
-        # Quick Start 只读 Issue：把开放且带新人标签的 Issue 作为起步任务，
-        # 历史争论不进贡献者上手剧本；起步任务按编号倒序，最新的排在前面。
+        # Quick Start 只读取带新人标签的 Issue，按编号倒序排列。
         threads = []
         starter_issues = [
             _thread_from_issue(item)
@@ -842,7 +841,7 @@ def context_from_backup(
         starter_issues = [
             item
             for item in starter_issues
-            if item.state == "open" and _is_starter_issue(item)
+            if _is_starter_issue(item)
         ]
         starter_issues.sort(key=lambda item: item.number, reverse=True)
         starter_issues = starter_issues[:top_threads]
