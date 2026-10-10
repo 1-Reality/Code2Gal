@@ -250,6 +250,7 @@ jobs:
     uses: ./.github/workflows/generate-core.yml
     with:
       repository: ${{ inputs.repository }}
+      queue_name: ${{ inputs.queue_name }}
       model: ${{ inputs.model }}
       base_url: ${{ inputs.base_url }}
       threads: ${{ inputs.threads }}
@@ -261,6 +262,7 @@ jobs:
       dry_run: ${{ inputs.dry_run }}
       deploy_pages: ${{ inputs.deploy_pages }}
       force_run: ${{ inputs.run_now || inputs.dry_run }}
+      cron_retry: false
       queue_file: ${{ needs.route.outputs.queue_file }}
       queue_request_id: ${{ needs.route.outputs.request_id }}
       task_id: ${{ needs.route.outputs.task_id }}
