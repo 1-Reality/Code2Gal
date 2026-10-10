@@ -1,0 +1,5 @@
+intro:ZTEStatMax 编年史|中兴路由器 Web UI 增强插件;
+changeBg:WebGalEnter.webp;
+bgm:s_Title.mp3;
+say:2026年4月30日，项目 ZTEStatMax 在 GitHub 上创建，主语言是 JavaScript。 -clear;
+end;

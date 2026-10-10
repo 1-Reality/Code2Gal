@@ -1,0 +1,160 @@
+intro:这是 ucxn slash BroTech 仓库|我是哥哥科技，源于兄弟，也源于网络;
+changeBg:bg.webp;
+bgm:s_Title.mp3;
+label:entry;
+BroTech:欢迎进入哥哥科技。;
+say:当前仓库的目录树很薄。;
+say:LICENSE README README_EN 兄弟关系促进法 哥哥科技的故事 opus。;
+BroTech:它没有一般项目常见的 src 或 build 目录。;
+BroTech:但这些文本就是当前版本最直接的证据。;
+say:README 说明了不刷机增强原厂 Web 的方法。;
+say:LICENSE 是一个自编许可，而不是标准模板。;
+BroTech:我的世界没有刷机。;
+BroTech:不去 Flash 那可怜的 ROM。;
+say:原厂固件继续负责数据面，我在 Web 管理层把数据调校好。;
+say:完全保留原厂 NPU 和硬件加速。;
+BroTech:把后台重新做得更适合真正想看数据的人。;
+
+label:core;
+;[repo2gal performance] cue000001 b000013
+changeBg:WebGalEnter.webp -enter=shockwaveIn -enterDuration=1200;
+changeFigure:character-guide-normal.png -transform={"position":{"x":-8.697,"y":326.35},"scale":{"x":1.538,"y":1.538}} -id=fig-guide;
+;[repo2gal performance] cue000001 b000013
+setTempAnimation:[{"duration":0,"scale":{"x":1.538,"y":1.538}},{"duration":600,"scale":{"x":1.63,"y":1.63}},{"duration":600,"scale":{"x":1.538,"y":1.538}}] -target=fig-guide -parallel;
+BroTech:真正在真实设备上运行的逻辑，记录在 README 的 Bro_Stat 段落里。;
+BroTech:它不是一个统一模板再替换 API 地址。;
+ucxn:不同厂商后台差异很大，你们怎么处理。;
+BroTech:华硕只给累计字节，就按真实时间差做差分。;
+BroTech:中兴能给设备瞬时速率，就使用它自己的数据。;
+BroTech:中兴同时存在新 Vue API 和老 Lua 接口，就根据实际环境探测。;
+BroTech:H3C 完整设备解析重，就拆分高频和低频数据。;
+GegeTech:这样每个品牌都保留了自己的性格。;
+BroTech:对。Bro_Stat 统一的是用户最终看到的概念。;
+say:谁在线，谁正在上传，谁正在下载。;
+say:每台设备现在多快，用了多少流量，WiFi 信号怎么样。;
+say:底下的 XML JSON Lua 差异由程序负责。;
+BroTech:用户真正想知道的其实一直很简单。;
+BroTech:底下那些乱七八糟的差异，本来就应该由程序解决。;
+
+choose:先看流量积分与误差处理:integral|先看双向奔赴防抖算法:debounce;
+label:integral;
+BroTech:普通情况下，用相邻两个采样点之间的梯形面积。;
+BroTech:Speed 旧 加 Speed 新 乘 delta t 除以 2。;
+ucxn:定时器设成 1000 毫秒，浏览器实际过了 1087 毫秒怎么办。;
+BroTech:真正重要的是 delta t。;
+BroTech:误差会一点一点积起来。;
+BroTech:上一轮是 0 下一轮突然变成 100 Mbps。;
+BroTech:真实网络不会在采样瞬间才启动。;
+BroTech:整段按 0 算会漏流量，整段按新速率算会高估。;
+BroTech:部分实现用三角形面积补偿中间缺失。;
+say:估算量和触发次数被单独记录。;
+BroTech:多个数据源同时保留，可以互相校验。;
+BroTech:WAN 侧统计，客户端侧统计，原厂累计量。;
+BroTech:它们不是简单重复显示几个数字。;
+say:某一刻一个来源掉到 0，其他两个还在增长，就值得怀疑。;
+jumpLabel:converge;
+
+label:debounce;
+;[repo2gal performance] cue000002 b000041
+setTempAnimation:[{"duration":0,"scale":{"x":1.538,"y":1.538}},{"duration":250,"scale":{"x":1.63,"y":1.63}},{"duration":250,"scale":{"x":1.538,"y":1.538}}] -target=fig-guide -parallel;
+BroTech:防抖不能只看时间或者固定门限。;
+BroTech:从 50 变到 51 要等，从 0 突然变成 100 也要等，这不合理。;
+BroTech:给 50 设置 45 到 55 的死区，真实值 51 可能永远停在 50。;
+BroTech:所以我把变化大小和持续时间放进同一个判断。;
+BroTech:大变化用幅度换时间，小变化用时间换幅度。;
+say:我称之为双向奔赴防抖算法。;
+BroTech:它把二元数组转换为一维加法。;
+BroTech:就好比 NAT 类型加和，6 为分界。;
+BroTech:这和传统 RFC 3489 经典打洞对照表完全等价。;
+jumpLabel:converge;
+
+label:converge;
+BroTech:高频路径还使用固定大小的 TypedArray 环形缓冲。;
+BroTech:界面只展示最近 64 个点，第 65 个点覆盖最老位置。;
+BroTech:大小是 2 的幂时，索引直接用位运算循环。;
+say:数据一直待在原来的内存块里。;
+say:不会因为新增一个点反复移动整个数组。;
+say:DOM 节点引用不需要每轮重复 querySelector。;
+BroTech:从比特转 MiB 不需要先来个字节。;
+BroTech:算比例不需要先 let 一个 total。;
+BroTech:每一步留在热路径里的操作都有理由。;
+BroTech:AI 给的第一次方案经常只是看起来正确。;
+BroTech:这些细节是在真实路由器上磨出来的。;
+
+label:community;
+changeBg:background-community.png;
+bgm:bgm-archive.ogg;
+BroTech:历史快照和当前文本基本一致。;
+BroTech:我没有看到能支撑版本演进的明确源码差异。;
+BroTech:所以不硬凑版本进化线。;
+say:社区资料中确有一些真实事件。;
+GegeTech:我发起过 Update README md，还有两次硬件描述优化。;
+say:ucxn 发起过说明完善和编号为 1 和 0 的 PR。;
+ucxn:那些 PR 是我在尝试把文档表达得更准确。;
+BroTech:这些事件没有改变当前仓库的根结构。;
+BroTech:当前仓库依然是品牌层和约束层。;
+BroTech:真正的运行代码在 Bro_Stat 和 ZTE_Stat_Max 仓库里。;
+say:这里保留的是为什么做和为什么这样想。;
+
+choose:深入中兴诈尸状态机:zombie|查看仓库自编许可约束:license;
+label:zombie;
+;[repo2gal performance] cue000003 b000072
+changeBg:background-archive.png -enter=shockwaveIn -enterDuration=1200;
+bgm:bgm-archive.ogg;
+BroTech:中兴官方路由的流量统计存在几大问题。;
+say:用户称之为清零 继承 诈尸。;
+ucxn:什么是诈尸。;
+BroTech:设备离线后，无线 AP 10 秒先报离线。;
+BroTech:然后维护 ARP 表 5 分钟。;
+BroTech:5 分钟内有风吹草动就会重试。;
+BroTech:5 分钟后再维护一轮 5 分钟。;
+BroTech:10 分钟后主路由有线端才得知离线。;
+BroTech:掉线 5 分钟内重连，不触发 bug。;
+BroTech:5 到 10 分钟有概率继承旧值，也有概率清零。;
+BroTech:清零是递减过程，很好识别。;
+BroTech:最恶心的是归零以后马上继承。;
+say:这种诈尸是合法的单调递增过程。;
+BroTech:官方漫游时会把流量算成两遍。;
+BroTech:漫游前 20G 流量，漫游后可能变成 40G。;
+BroTech:我的插件能防清零，但诈尸必须额外判断。;
+BroTech:这不再是简单后台美化。;
+BroTech:这是一套网络遥测的数据处理方案。;
+jumpLabel:ending;
+
+label:license;
+;[repo2gal performance] cue000004 b000090
+changeBg:WebGAL_New_Enter_Image.webp -enter=shockwaveIn -enterDuration=1200;
+bgm:s_Title.mp3;
+BroTech:仓库的 LICENSE 不是标准开源模板。;
+BroTech:它把版权转移给两个特定角色。;
+GegeTech:我们社区参与者只是见证者。;
+BroTech:协议说需要叫一声哥，但叫哥不是法律需求。;
+BroTech:即使不保留许可文件，授权依然不可撤销。;
+BroTech:它把程序类和非程序类作品分类授予。;
+say:标准许可只会提供协议名，自编许可保留全文。;
+BroTech:这个仓库选择了后者。;
+BroTech:它把作品分给程序类和非程序类。;
+BroTech:故事比例成为分配依据之一。;
+GegeTech:听起来不像传统软件许可。;
+BroTech:对，这不是为了商业项目。;
+BroTech:但我不把法律条文当成故事主体。;
+BroTech:真正让我继续的是数据和路由。;
+BroTech:我喜欢的不是路由器，而是 Route。;
+BroTech:一个数据包进入网络，经过一次次判断，找到下一跳。;
+say:路由是赛博导航。;
+BroTech:让路由器认真做路由。;
+jumpLabel:ending;
+
+label:ending;
+;[repo2gal performance] cue000005 b000108
+changeBg:WebGalEnter.webp -enter=shockwaveIn -enterDuration=1200;
+bgm:s_Title.mp3;
+;[repo2gal performance] cue000005 b000108
+setTempAnimation:[{"duration":0,"scale":{"x":1.538,"y":1.538}},{"duration":600,"scale":{"x":1.63,"y":1.63}},{"duration":600,"scale":{"x":1.538,"y":1.538}}] -target=fig-guide -parallel;
+BroTech:为什么叫哥哥科技。;
+BroTech:因为我爱着我的哥哥和弟弟。;
+say:这个答案没有第二个版本。;
+say:原厂 NPU 和硬件加速保留，Web 管理层重新调校数据。;
+BroTech:Code what matters。;
+say:因为有个为哥哥而生，服务于弟弟的 哥哥科技。;
+end;

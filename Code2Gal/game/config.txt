@@ -1,0 +1,8 @@
+Game_name:1-Reality/Code2Gal 编年史;
+Game_key:repo2gal_1-Reality_Code2Gal;
+Title_img:WebGAL_New_Enter_Image.webp;
+Title_bgm:s_Title.mp3;
+Game_Logo:WebGalEnter.webp;
+Enable_Appreciation:true;
+Enable_Continue:true;
+Enable_flowchart:true;
