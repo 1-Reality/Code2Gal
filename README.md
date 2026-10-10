@@ -4,9 +4,7 @@
 
 [![License: GPL-3.0](https://img.shields.io/badge/License-GPL--3.0-blue.svg)](LICENSE)
 
-输入一个 GitHub 存储库地址，输出一个静态网站：以视觉小说（编年史）的形式讲述该项目的
-真实历史——它为何诞生、经历过哪些争论、社区如何演变。剧情素材全部来自该库的真实
-源码、README、Issue、PR、Discussion、wiki 与 Release。
+输入一个 GitHub 仓库地址，输出静态 WebGAL 视觉小说。默认 `chronicle` 讲项目历史；`overview` 生成仓库导览；`quickstart` 带潜在贡献者了解开发环境、测试入口与真实起步任务。素材来自目标仓库的源码、README、项目配置、Issue、PR、Discussion、wiki 与 Release，按模式采集所需数据。
 
 
 ## 演示
@@ -32,14 +30,16 @@ https://repo2gal.rhopaper.top/demo
 
 ### 剧本生成
 
-- [x] Chronicle 模式剧本生成（单场景线性叙事 + 少量分支）
-- [x] 显式 `--performance` 动态演出规划（Beat Manifest + Performance Plan v1）
+- [x] Chronicle 编年史模式（真实项目历史与社区事件）
+- [x] Overview 仓库导览模式（项目特性、安装使用与目录地图）
+- [x] Quick Start 贡献者上手模式（贡献指南、测试入口、CI 与真实起步 Issue）
+- [x] 三轮导演生成：剧本草稿 → 自然语言演出批注 → Director Plan JSON + 确定性编译
 - [x] 确定性角色表白名单（项目化身 / 核心贡献者 / 技术栈精灵）
 - [x] 任意 OpenAI 兼容端点（`--base-url` / `--model` / 环境变量）
 - [x] `--dry-run` / `--script` / `--save-prompt` 省钱与离线路径
 - [ ] LLM 失败自动重试（需依赖调研记录）
 - [ ] 多场景 / 多章节剧情切分
-- [ ] Chronicle 之外的游戏模式
+- [x] Chronicle 之外的 Overview / Quick Start 游戏模式
 
 ### 校验与安全
 
@@ -94,6 +94,8 @@ export GITHUB_TOKEN=github_pat_xxx # 必填；Discussion 的 GraphQL API 必须�
 export REPO2GAL_API_KEY=sk-xxx     # LLM API Key
 
 .venv/bin/repo2gal owner/repo
+.venv/bin/repo2gal owner/repo --mode overview
+.venv/bin/repo2gal owner/repo --mode quickstart
 python3 -m http.server -d output/<repo> 8000   # 打开 http://localhost:8000 游玩
 ```
 
@@ -105,8 +107,8 @@ python3 -m http.server -d output/<repo> 8000   # 打开 http://localhost:8000 �
   --asset-pack builtin:cc0-chronicle --public-assets
 ```
 
-显式开启动态演出。默认 profile 是 `chronicle-subtle`，第二次 LLM 只生成结构化演出计划，
-Python 再编译为 WebGAL 4.6.2 命令：
+动态演出由三轮导演流程默认生成：先写剧本草稿，再生成自然语言演出批注，最后由同一个配置模型输出结构化导演计划，
+Python 确定性编译为 WebGAL 4.6.2 命令。`--profile` 控制演出风格与预算：
 
 ```bash
 .venv/bin/repo2gal owner/repo \
