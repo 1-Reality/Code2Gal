@@ -63,15 +63,6 @@ _DIALOGUE_LINE = re.compile(r"^(?P<speaker>.+?)\s*[:：]\s*(?P<text>.+)$")
 #: 进入 WebGAL 正文后会破坏解析的字符/模式（不可转义，只能禁止）。
 _FORBIDDEN_IN_TEXT = (";", " -")
 
-_MODE_RULES = {
-    "chronicle": "narration 只用于没有具体角色说话的客观叙述；凡是角色说出口的话必须写成 dialogue。",
-    "overview": "本模式不使用旁白：禁止 narration；带路的向导台词必须全部写成 dialogue，"
-    "带文本的 choice beat 也必须写 speaker。",
-    "quickstart": "本模式不使用旁白：禁止 narration；带新人上手的维护者台词必须全部写成"
-    " dialogue，带文本的 choice beat 也必须写 speaker。",
-}
-
-
 def _beat_id(index: int) -> str:
     return f"b{index:06d}"
 
@@ -187,7 +178,6 @@ def build_director_prompt(
         .replace("{capabilities}", json.dumps(CAPABILITIES, ensure_ascii=False, indent=2))
         .replace("{profile}", profile)
         .replace("{maxActionsPerCue}", str(PROFILES[profile]["maxActionsPerCue"]))
-        .replace("{modeRule}", _MODE_RULES[mode])
         .replace("{annotations}", annotations or "（无批注）")
         .replace("{draft}", draft)
     )
