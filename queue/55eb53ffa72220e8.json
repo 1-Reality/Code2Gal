@@ -1,0 +1,17 @@
+{
+  "request_id": "38027619422-1",
+  "queue_name": "261010testnew",
+  "task_id": "run-31-55eb53ffa72220e8",
+  "repository": "ucxn/ZTE-stat_max",
+  "model": "deepseek-flash",
+  "base_url": "https://api.deepseek.com/v1",
+  "threads": "30",
+  "source_context": false,
+  "source_history": "1",
+  "performance": true,
+  "strict": false,
+  "strict_performance": false,
+  "dry_run": false,
+  "deploy_pages": true,
+  "code_ref": "upstream-features"
+}
