@@ -1,0 +1,18 @@
+{
+  "request_id": "38056457449-1",
+  "queue_name": "libre-ov",
+  "mode": "overview",
+  "task_id": "run-44-f46db70d89199d89",
+  "repository": "ucxn/zte-Stat_MAX",
+  "model": "deepseek-v4-pro",
+  "base_url": "https://api.deepseek.com/v1",
+  "threads": "12",
+  "source_context": false,
+  "source_history": "1",
+  "performance": true,
+  "strict": false,
+  "strict_performance": false,
+  "dry_run": false,
+  "deploy_pages": true,
+  "code_ref": "upstream-features"
+}
