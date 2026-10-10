@@ -1,0 +1,18 @@
+{
+  "request_id": "38056411211-1",
+  "queue_name": "libre.qs",
+  "mode": "quickstart",
+  "task_id": "run-43-7ba14fa56197e354",
+  "repository": "ucxn/zte-Stat_MAX",
+  "model": "deepseek-v4-pro",
+  "base_url": "https://api.deepseek.com/v1",
+  "threads": "12",
+  "source_context": false,
+  "source_history": "1",
+  "performance": true,
+  "strict": false,
+  "strict_performance": false,
+  "dry_run": false,
+  "deploy_pages": true,
+  "code_ref": "upstream-features"
+}
