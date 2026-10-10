@@ -72,6 +72,7 @@ jobs:
     uses: ./.github/workflows/generate-core.yml
     with:
       repository: ${{ matrix.request.repository }}
+      queue_name: ${{ matrix.request.queue_name || 'default' }}
       model: ${{ matrix.request.model }}
       base_url: ${{ matrix.request.base_url }}
       threads: ${{ matrix.request.threads }}
@@ -83,6 +84,7 @@ jobs:
       dry_run: ${{ matrix.request.dry_run }}
       deploy_pages: ${{ matrix.request.deploy_pages }}
       force_run: ${{ github.event_name == 'workflow_dispatch' && inputs.force_run }}
+      cron_retry: ${{ github.event_name == 'schedule' }}
       queue_file: ${{ matrix.request.queue_file }}
       queue_request_id: ${{ matrix.request.request_id }}
       task_id: ${{ matrix.request.task_id }}
