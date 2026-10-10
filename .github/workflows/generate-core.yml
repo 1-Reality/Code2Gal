@@ -50,6 +50,14 @@ on:
         required: false
         default: ""
         type: string
+      queue_name:
+        required: false
+        default: "default"
+        type: string
+      cron_retry:
+        required: false
+        default: false
+        type: boolean
       task_id:
         required: true
         type: string
@@ -139,6 +147,7 @@ jobs:
         shell: bash
         env:
           TARGET_INPUT: ${{ inputs.repository }}
+          QUEUE_NAME: ${{ inputs.queue_name }}
         run: |
           set -euo pipefail
           target="${TARGET_INPUT#https://github.com/}"
@@ -154,10 +163,23 @@ jobs:
           repo="${target#*/}"
           slug="${owner}-${repo}"
 
+          queue_name="$(printf '%s' "$QUEUE_NAME" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')"
+          [[ -n "$queue_name" ]] || queue_name="default"
+          if [[ "$queue_name" == "default" ]]; then
+            # Preserve existing project URLs for the default queue.
+            project_key="$repo"
+          else
+            queue_slug="$(printf '%s' "$queue_name" | tr '[:upper:]' '[:lower:]' | sed -E 's/[^a-z0-9]+/-/g; s/^-+//; s/-+$//' | cut -c1-32)"
+            [[ -n "$queue_slug" ]] || queue_slug="queue"
+            queue_hash="$(printf '%s' "$queue_name" | sha256sum | cut -c1-8)"
+            project_key="${slug}--${queue_slug}-${queue_hash}"
+          fi
+
           echo "target=$target" >> "$GITHUB_OUTPUT"
           echo "owner=$owner" >> "$GITHUB_OUTPUT"
           echo "repo=$repo" >> "$GITHUB_OUTPUT"
           echo "slug=$slug" >> "$GITHUB_OUTPUT"
+          echo "project_key=$project_key" >> "$GITHUB_OUTPUT"
 
       - name: Check credentials
         if: steps.price_gate.outputs.allowed == 'true'
@@ -263,7 +285,7 @@ jobs:
         shell: bash
         env:
           TARGET_REPOSITORY: ${{ steps.target.outputs.target }}
-          OUTPUT_REPO: ${{ steps.target.outputs.repo }}
+          OUTPUT_PROJECT: ${{ steps.target.outputs.project_key }}
           THREADS: ${{ inputs.threads }}
           SOURCE_CONTEXT: ${{ inputs.source_context }}
           SOURCE_HISTORY: ${{ inputs.source_history }}
@@ -291,7 +313,7 @@ jobs:
             args+=(--dry-run)
           else
             args+=(
-              --output "output/$OUTPUT_REPO"
+              --output "output/$OUTPUT_PROJECT"
               --asset-pack builtin:cc0-chronicle
               --public-assets
             )
@@ -410,6 +432,69 @@ jobs:
           fi
 
           git commit -m "queue: complete $REQUEST_ID"
+          git push origin HEAD:generation-queue
+
+  record_cron_failure:
+    name: Record scheduled queue failure
+    needs: generate
+    if: ${{ always() && inputs.cron_retry && needs.generate.result == 'failure' && inputs.queue_file != '' && inputs.queue_request_id != '' }}
+    runs-on: ubuntu-latest
+    concurrency:
+      group: code2gal-generation-queue
+      cancel-in-progress: false
+    steps:
+      - name: Checkout generation queue
+        uses: actions/checkout@v4
+        with:
+          ref: generation-queue
+          path: generation-queue
+          fetch-depth: 1
+
+      - name: Increment scheduled failure count
+        shell: bash
+        working-directory: generation-queue
+        env:
+          QUEUE_FILE: ${{ inputs.queue_file }}
+          REQUEST_ID: ${{ inputs.queue_request_id }}
+        run: |
+          set -euo pipefail
+
+          if [[ ! -f "$QUEUE_FILE" ]]; then
+            echo "Queue entry already gone: $QUEUE_FILE"
+            exit 0
+          fi
+
+          current="$(jq -r '.request_id // ""' "$QUEUE_FILE")"
+          if [[ "$current" != "$REQUEST_ID" ]]; then
+            echo "Queue entry was replaced by a newer request; leaving it unchanged."
+            exit 0
+          fi
+
+          failures="$(jq -r '((.cron_failures // 0) | tonumber) + 1' "$QUEUE_FILE")"
+          failed_at="$(date -u '+%Y-%m-%dT%H:%M:%SZ')"
+          tmp="$(mktemp)"
+          jq --argjson failures "$failures" --arg failed_at "$failed_at" \
+            '. + {cron_failures: $failures, last_cron_failure_at: $failed_at}' \
+            "$QUEUE_FILE" > "$tmp"
+
+          if (( failures >= 3 )); then
+            jq '. + {cron_failure_limit_reached: true}' "$tmp" > "$tmp.dead"
+            mkdir -p failed-queue
+            mv "$tmp.dead" "failed-queue/$(basename "$QUEUE_FILE")"
+            rm -f "$QUEUE_FILE" "$tmp"
+            echo "Moved $QUEUE_FILE to failed-queue after $failures scheduled failures."
+          else
+            mv "$tmp" "$QUEUE_FILE"
+            echo "Recorded scheduled failure $failures/3 for $QUEUE_FILE."
+          fi
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          if git diff --cached --quiet; then
+            exit 0
+          fi
+          git commit -m "queue: cron failure $failures/3 for $REQUEST_ID"
           git push origin HEAD:generation-queue
 
   deploy:
