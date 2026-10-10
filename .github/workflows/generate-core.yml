@@ -354,7 +354,7 @@ jobs:
 
       - name: Upload WebGAL and audit files
         if: ${{ always() && steps.price_gate.outputs.allowed == 'true' }}
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: ${{ steps.artifact.outputs.name || format('repo2gal-failed-{0}', inputs.task_id) }}
           path: |
