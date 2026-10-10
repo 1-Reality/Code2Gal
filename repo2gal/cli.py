@@ -152,6 +152,7 @@ def generate(
         public_assets=public_assets,
         performance=performance,
         performance_profile=performance_profile,
+        profile=performance_profile,
         strict_performance=strict_performance,
         save_beat_manifest=save_beat_manifest,
         save_performance_plan=save_performance_plan,
