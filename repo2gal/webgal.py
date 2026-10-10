@@ -48,6 +48,7 @@ KNOWN_COMMANDS: frozenset[str] = frozenset(
 
 # 允许 LLM 直接产出的最小子集。任何超出此集合的命令都会被 validator 降级，
 # 因为 WebGAL 对未知命令不报错、而是把命令名当成角色名静默错渲染。
+# v0.7.0 起 LLM 不再输出 WebGAL 文本，此集合约束 --script 用户脚本。
 SAFE_COMMANDS: frozenset[str] = frozenset(
     {
         "say",
@@ -59,6 +60,18 @@ SAFE_COMMANDS: frozenset[str] = frozenset(
         "jumpLabel",
         "choose",
         "end",
+    }
+)
+
+# 确定性编译内核（director.compile_director / performance._compile_action）
+# 会产出的额外命令。编译产物由普通代码生成，可以用比 SAFE_COMMANDS 更宽的
+# 白名单过 validator（validator 仍是硬边界：结构、跳转、素材引用照查）。
+COMPILE_COMMANDS: frozenset[str] = SAFE_COMMANDS | frozenset(
+    {
+        "pixiInit",
+        "pixiPerform",
+        "setTransform",
+        "setTempAnimation",
     }
 )
 
@@ -74,6 +87,15 @@ ASSET_DIRS: dict[str, str] = {
     "playVideo": "video",
     "changeScene": "scene",
     "callScene": "scene",
+}
+
+# 素材命令里的保留引用值：解析器认可、但不是素材名的取值。
+# ``changeFigure:none`` 是官方「清空立绘」的写法，确定性编译内核用它实现角色退场
+# （``performance._compile_action`` 的 ``figure.exit``）。素材白名单必须放行它，
+# 否则每次角色退场都会被 validator 当作缺失素材降级：非 strict 时角色不会退场，
+# `--strict` 时整个运行以退出码 5 失败。
+RESERVED_ASSET_REFERENCES: dict[str, frozenset[str]] = {
+    "changeFigure": frozenset({"none"}),
 }
 
 

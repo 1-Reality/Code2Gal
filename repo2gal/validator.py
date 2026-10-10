@@ -8,6 +8,10 @@
 本模块在生成之后、打包之前把脚本收敛到白名单子集内：
 不认识的一律降级为旁白，绝不放行。遵循 v5 文档的 Rule 2 ——
 解析失败降级成旁白，永不抛异常中断构建。
+
+WebGAL 4.6.2 的 ``say.ts`` 对 speaker 采用“先继承上一句”的策略，
+只有 ``-clear`` 参数才清空说话人。因此本模块还要给所有旁白确定性补上
+``-clear``，否则旁白会顶着上一句角色的名字显示。
 """
 
 from __future__ import annotations
@@ -15,7 +19,12 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass, field
 
-from .webgal import KNOWN_COMMANDS, SAFE_COMMANDS, statement_body
+from .webgal import (
+    KNOWN_COMMANDS,
+    RESERVED_ASSET_REFERENCES,
+    SAFE_COMMANDS,
+    statement_body,
+)
 
 #: 形似命令的 ASCII 标识符（camelCase / snake_case），用于识别 LLM 幻觉命令。
 _IDENTIFIER = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
@@ -25,6 +34,23 @@ _FENCE = re.compile(r"^\s*```")
 
 #: 纯 Markdown 噪声行：标题、水平线、列表符号。
 _MD_NOISE = re.compile(r"^\s*(#{1,6}\s|---+\s*$|\*\*\*+\s*$)")
+
+#: `say` 的 `-clear` 参数。WebGAL 4.6.2 的 say.ts 先继承 stageState.showName，
+#: 只有显式 `-clear` 才把说话人清空；validator 必须确定性补齐，否则旁白会
+#: 顶着上一句角色的名字显示。
+_CLEAR_OPTION = re.compile(r"(?:^| )-clear(?:=[^ ]+)?(?= |$)")
+
+
+def _narration_statement(content: str) -> str:
+    """生成必定清空上一说话人的旁白语句。
+
+    如果输入已带 ``-clear``，先移除再统一追加一个，避免重复参数或
+    ``-clear=false`` 这类取值继续继承说话人。
+    """
+    content = content.strip()
+    without_clear = _CLEAR_OPTION.sub("", content).strip()
+    without_clear = re.sub(r" {2,}", " ", without_clear)
+    return f"say:{without_clear} -clear;"
 
 
 @dataclass
@@ -123,18 +149,46 @@ def sanitize(
 
         cmd, content = _split_command(body)
 
-        # --- 情形 1：没有冒号 -> 引擎视为「连续对话」，安全 ---
+        # --- 情形 1：没有冒号 ---
+        # WebGAL 会把整行当成 speaker 再显示同一段文字（commandParser.ts 的
+        # 兜底 say），而不是“连续对话”；只有裸命令（如 `end`）才保持原样。
         if cmd is None:
-            out.append(f"{body};")
+            if body in KNOWN_COMMANDS:
+                out.append(f"{body};")
+                continue
+            safe = _narration_statement(body)
+            report.add(
+                line_no,
+                "fix",
+                "无冒号文本不是连续对话，已转为清空说话人的旁白",
+                original,
+                safe,
+            )
+            out.append(safe)
             continue
 
         cmd = cmd.strip()
+
+        # --- 情形 1b：空命令区（`:文本;`）等价于旁白，同样必须清空说话人 ---
+        if not cmd:
+            safe = _narration_statement(content)
+            report.add(
+                line_no,
+                "fix",
+                "空命令区已转为清空说话人的旁白",
+                original,
+                safe,
+            )
+            out.append(safe)
+            continue
 
         # --- 情形 2：白名单命令 ---
         if cmd in allowed:
             if assets is not None and cmd in ("changeBg", "changeFigure", "bgm"):
                 reference = content.split(" -", 1)[0].strip()
-                if reference not in assets.get(cmd, frozenset()):
+                # 保留取值（如 changeFigure:none 清空立绘）不是素材名，直接放行。
+                reserved = RESERVED_ASSET_REFERENCES.get(cmd, frozenset())
+                if reference not in reserved and reference not in assets.get(cmd, frozenset()):
                     safe = f";[repo2gal] 素材引用 '{reference}' 不可用，已注释：{body};"
                     report.add(
                         line_no,
@@ -153,20 +207,24 @@ def sanitize(
             elif cmd == "choose":
                 for target in _choose_targets(content):
                     jumps.append((line_no, target, len(out)))
-            if " -" in content and cmd in ("say",):
-                report.add(
-                    line_no,
-                    "warn",
-                    "旁白正文含 ' -'，会被解析成参数区且无法转义",
-                    original,
-                    None,
-                )
+            if cmd == "say":
+                body_without_clear = _CLEAR_OPTION.sub("", content).strip()
+                if " -" in body_without_clear:
+                    report.add(
+                        line_no,
+                        "warn",
+                        "旁白正文含 ' -'，会被解析成参数区且无法转义",
+                        original,
+                        None,
+                    )
+                out.append(_narration_statement(content))
+                continue
             out.append(f"{body};")
             continue
 
         # --- 情形 3：已知但不在白名单的命令 -> 降级 ---
         if cmd in KNOWN_COMMANDS:
-            safe = f"say:{content.strip()};"
+            safe = _narration_statement(content)
             report.add(
                 line_no,
                 "downgrade",
@@ -192,7 +250,7 @@ def sanitize(
 
         # --- 情形 5：形似命令的 ASCII 标识符 -> 判定为幻觉命令，降级 ---
         if _IDENTIFIER.match(cmd):
-            safe = f"say:{content.strip()};"
+            safe = _narration_statement(content)
             report.add(
                 line_no,
                 "downgrade",

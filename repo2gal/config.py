@@ -14,6 +14,25 @@ DEFAULT_BASE_URL = "https://api.deepseek.com/v1"
 DEFAULT_MODEL = "deepseek-v4-pro"
 DEFAULT_LLM_TIMEOUT = 300
 
+# Director 流程：第三轮导演 JSON 校验失败时的最大重试次数（0 表示不重试）。
+DEFAULT_FORMAT_RETRIES = 2
+
+# 剧本生成模式。Chronicle（编年史）是 v0.1.0 起的默认模式；
+# Overview（仓库概览）是 v0.6.0 新增的第二种游戏模式；
+# Quick Start（贡献者上手）是 v0.8.0 新增的第三种游戏模式。
+GAME_MODES = ("chronicle", "overview", "quickstart")
+DEFAULT_GAME_MODE = "chronicle"
+GAME_MODE_TITLES = {
+    "chronicle": "编年史",
+    "overview": "仓库概览",
+    "quickstart": "贡献者上手",
+}
+
+# 不使用旁白的模式：全部台词都必须由角色亲口说出。
+# Overview 自 v0.6.2 起如此（WebGAL 4.6.2 会把无说话人的文本渲染成上一句 speaker）；
+# Quick Start 与之同构——带新人上手的维护者全程说话，不靠旁白解说。
+NARRATION_FREE_MODES = ("overview", "quickstart")
+
 # WebGAL 发行版自带的兼容默认素材；使用 Asset Pack 时仍与包内资源并存。
 DEFAULT_BACKGROUNDS = ["bg.webp", "WebGalEnter.webp", "WebGAL_New_Enter_Image.webp"]
 DEFAULT_BGM = ["s_Title.mp3"]
@@ -29,7 +48,7 @@ def resolve_base_url(base_url: str | None) -> str:
     return (base_url or env_value("REPO2GAL_BASE_URL") or DEFAULT_BASE_URL).rstrip("/")
 
 
-def resolve_model(model: str | None) -> str:
+def resolve_model(model: str | None = None) -> str:
     return model or env_value("REPO2GAL_MODEL") or DEFAULT_MODEL
 
 
@@ -46,8 +65,10 @@ def default_backup_root(owner: str) -> Path:
     return Path(".repo2gal") / "backups" / owner
 
 
-def default_output_dir(repo: str) -> Path:
-    return Path("output") / repo
+def default_output_dir(repo: str, mode: str = DEFAULT_GAME_MODE) -> Path:
+    """默认产物目录；Chronicle 保持 output/<repo>，其他模式加模式后缀。"""
+    path = Path("output") / repo
+    return path if mode == DEFAULT_GAME_MODE else Path(f"{path}-{mode}")
 
 
 def webgal_cache_dir() -> Path:
