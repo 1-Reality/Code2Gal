@@ -80,13 +80,12 @@ def build_cast(ctx: RepoContext, *, mode: str = DEFAULT_GAME_MODE) -> Cast:
     if mode == "overview":
         add(
             project,
-            f"{ctx.full_name} 的项目化身，这次担任新手村向导。{ctx.description or '说话直率，擅长把功能和用法讲清楚'}",
+            f"{ctx.full_name} 的项目化身。{ctx.description or ''}",
         )
     elif mode == "quickstart":
         add(
             project,
-            f"{ctx.full_name} 的项目化身，负责带第一次参与项目的人走完上手流程。"
-            f"{ctx.description or '像熟悉仓库的维护者一样说话，遇到问题就一起找入口'}",
+            f"{ctx.full_name} 的项目化身。{ctx.description or ''}",
         )
     else:
         add(
@@ -98,25 +97,18 @@ def build_cast(ctx: RepoContext, *, mode: str = DEFAULT_GAME_MODE) -> Cast:
         for c in ctx.contributors[:4]:
             add(
                 _sanitize_name(c.login),
-                f"社区参与者，在筛选后的叙事素材中出现 {c.contributions} 次",
+                "社区贡献者",
             )
     elif mode == "quickstart":
         for c in ctx.contributors[:2]:
             add(
                 _sanitize_name(c.login),
-                f"维护者之一，评审外部贡献者的改动，在起步任务中出现 {c.contributions} 次",
+                "项目参与者",
             )
 
     lang = _sanitize_name(ctx.language)
     if lang and lang.lower() != "未知":
-        descriptions = {
-            "overview": f"{ctx.language} 语言的拟人化身，负责解释技术栈和配置层面的问题",
-            "quickstart": f"{ctx.language} 语言的拟人化身，负责解释开发环境、依赖与构建问题",
-        }
-        add(
-            lang,
-            descriptions.get(mode, f"{ctx.language} 语言的拟人化身，代表这个项目的技术底色"),
-        )
+        add(lang, f"{ctx.language} 的拟人化身")
 
     return Cast(entries=entries)
 
@@ -252,19 +244,19 @@ def render_quickstart_context(ctx: RepoContext, *, max_chars: int = 16000) -> st
         parts.append(f"\n## 目录结构（已过滤依赖目录与构建产物，最深 4 层）\n{ctx.file_tree}")
 
     if ctx.starter_issues:
-        parts.append("\n## 起步任务（开放且带新人标签的真实 Issue）")
+        parts.append("\n## 带新人标签的 Issue")
         for issue in ctx.starter_issues:
             labels = "、".join(issue.labels) or "（无标签）"
             parts.append(
                 f"\n### #{issue.number} {issue.title}"
-                f"\n标签：{labels}　发起人：{issue.author}　时间：{issue.created_at}"
+                f"\n状态：{issue.state}　标签：{labels}　发起人：{issue.author}　时间：{issue.created_at}"
                 f"　评论数：{issue.comment_count}"
             )
             if issue.body:
                 parts.append(f"正文：{issue.body}")
     else:
         parts.append(
-            "\n## 起步任务\n（目前没有找到带新人标签的开放 Issue。）"
+            "\n## 带新人标签的 Issue\n（没有找到带新人标签的 Issue。）"
         )
 
     if ctx.wiki_excerpt:
