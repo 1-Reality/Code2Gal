@@ -9,6 +9,8 @@ base_url 接入。本模块只负责网络与响应解析，并把所有失败�
 
 from __future__ import annotations
 
+from typing import Callable
+
 import requests
 
 from .config import DEFAULT_LLM_TIMEOUT, resolve_api_key
@@ -27,11 +29,13 @@ class LLMClient:
         model: str,
         api_key: str | None = None,
         timeout: int = DEFAULT_LLM_TIMEOUT,
+        notify: Callable[[str], None] | None = None,
     ) -> None:
         self.base_url = base_url.rstrip("/")
         self.model = model
         self.api_key = api_key
         self.timeout = timeout
+        self.notify = notify
 
     def complete(self, prompt: str, *, temperature: float = 0.8) -> str:
         """调用一次 Chat Completions 并返回 content 字符串。"""

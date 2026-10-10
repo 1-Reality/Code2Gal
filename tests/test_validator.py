@@ -21,7 +21,7 @@ def test_hallucinated_command_downgraded():
     """LLM 幻觉命令必须降级，否则会变成一个叫 showCode 的角色在说话。"""
     out, rep = run("showCode:print(1);\n")
     assert "showCode:" not in out
-    assert "say:print(1);" in out
+    assert "say:print(1) -clear;" in out
     assert rep.downgrades == 1
 
 
@@ -33,7 +33,7 @@ def test_declared_speaker_kept():
 def test_undeclared_ascii_speaker_downgraded():
     """未声明的 ASCII 名字与幻觉命令无法区分，一律降级。"""
     out, rep = run("Mystery:你好;\nend;\n", speakers=set())
-    assert "say:你好;" in out
+    assert "say:你好 -clear;" in out
     assert rep.downgrades == 1
 
 
@@ -55,12 +55,12 @@ def test_code_fence_and_markdown_stripped():
     assert "```" not in out
     assert "## 第一章" not in out
     assert "---" not in out
-    assert "say:你好;" in out
+    assert "say:你好 -clear;" in out
 
 
 def test_missing_semicolon_added():
     out, _ = run("say:没有分号\nend;\n")
-    assert "say:没有分号;" in out
+    assert "say:没有分号 -clear;" in out
 
 
 def test_end_appended_when_absent():
@@ -106,11 +106,38 @@ def test_choose_scene_file_target_allowed():
     assert rep.downgrades == 0
 
 
-def test_continuous_dialogue_line_kept():
-    """没有冒号的行是「连续对话」，引擎行为安全。"""
+def test_colonless_narration_becomes_say_with_clear():
+    """没有冒号的文本会被 parser 当成 speaker，必须转为带 -clear 的旁白。"""
     out, rep = run("这是一句没有冒号的旁白\nend;\n")
-    assert "这是一句没有冒号的旁白;" in out
+    assert "这是一句没有冒号的旁白" not in out.splitlines()[0].split(":", 1)[0]
+    assert "say:这是一句没有冒号的旁白 -clear;" in out
+    assert any(f.kind == "fix" for f in rep.findings)
     assert rep.downgrades == 0
+
+
+def test_say_always_clears_previous_speaker():
+    """WebGAL 4.6.2 的 say.ts 先继承上一句 speaker，必须补 -clear。"""
+    out, rep = run("widget:你好;\nsay:这是旁白;\nend;\n", speakers={"widget"})
+    assert "widget:你好;" in out
+    assert "say:这是旁白 -clear;" in out
+    assert rep.downgrades == 0
+
+
+def test_explicit_say_clear_is_not_duplicated():
+    out, _ = run("say:这是旁白 -clear;\nend;\n")
+    assert "say:这是旁白 -clear;" in out
+
+
+def test_say_clear_false_is_forced_to_true():
+    out, _ = run("say:这是旁白 -clear=false;\nend;\n")
+    assert "say:这是旁白 -clear;" in out
+    assert "false" not in out.splitlines()[0]
+
+
+def test_empty_command_prefix_becomes_cleared_narration():
+    out, rep = run(":这是旁白;\nend;\n")
+    assert "say:这是旁白 -clear;" in out
+    assert any(f.kind == "fix" for f in rep.findings)
 
 
 def test_arg_region_warning():
@@ -133,6 +160,31 @@ def test_change_figure_is_safe_when_asset_is_declared():
     out, rep = run("changeFigure:character.guide.normal -left;\nend;\n", assets=assets)
     assert "changeFigure:character.guide.normal -left;" in out
     assert rep.downgrades == 0
+
+
+def test_change_figure_none_is_reserved_and_kept():
+    """changeFigure:none 是官方「清空立绘」，不是缺失素材（figure.exit 的编译产物）。"""
+    assets = {
+        "changeBg": frozenset({"background.archive"}),
+        "changeFigure": frozenset({"character.guide.normal"}),
+        "bgm": frozenset({"bgm.archive"}),
+    }
+    line = "changeFigure:none -id=fig-guide -duration=0;"
+    out, rep = run(f"{line}\nend;\n", assets=assets)
+    assert line in out
+    assert rep.downgrades == 0
+
+
+def test_reserved_reference_is_command_scoped():
+    """none 只对 changeFigure 是保留值；其它素材命令仍按缺失素材降级。"""
+    assets = {
+        "changeBg": frozenset({"background.archive"}),
+        "changeFigure": frozenset({"character.guide.normal"}),
+        "bgm": frozenset({"bgm.archive"}),
+    }
+    out, rep = run("changeBg:none;\nend;\n", assets=assets)
+    assert out.splitlines()[0].startswith(";[repo2gal]")
+    assert rep.downgrades == 1
 
 
 def test_unknown_asset_reference_is_commented_out():
