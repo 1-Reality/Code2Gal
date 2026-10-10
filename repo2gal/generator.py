@@ -80,13 +80,13 @@ def build_cast(ctx: RepoContext, *, mode: str = DEFAULT_GAME_MODE) -> Cast:
     if mode == "overview":
         add(
             project,
-            f"{ctx.full_name} 的项目化身，这次担任新手村向导。{ctx.description or '只讲资料能证明的内容'}",
+            f"{ctx.full_name} 的项目化身，这次担任新手村向导。{ctx.description or '说话直率，擅长把功能和用法讲清楚'}",
         )
     elif mode == "quickstart":
         add(
             project,
             f"{ctx.full_name} 的项目化身，负责带第一次参与项目的人走完上手流程。"
-            f"{ctx.description or '只讲资料能证明的做法'}",
+            f"{ctx.description or '像熟悉仓库的维护者一样说话，遇到问题就一起找入口'}",
         )
     else:
         add(
@@ -183,7 +183,7 @@ def render_overview_context(ctx: RepoContext, *, max_chars: int = 12000) -> str:
     """
     parts: list[str] = [
         f"## 仓库：{ctx.full_name}",
-        f"- 一句话简介：{ctx.description or '（资料未提供，请从 README 提炼）'}",
+        f"- 一句话简介：{ctx.description or '（GitHub 仓库简介为空）'}",
         f"- 主语言：{ctx.language}　创建于：{ctx.created_at or '未知'}",
     ]
     if ctx.stars:
@@ -228,7 +228,7 @@ def render_quickstart_context(ctx: RepoContext, *, max_chars: int = 16000) -> st
     """
     parts: list[str] = [
         f"## 仓库：{ctx.full_name}",
-        f"- 一句话简介：{ctx.description or '（资料未提供，请从 README 提炼）'}",
+        f"- 一句话简介：{ctx.description or '（GitHub 仓库简介为空）'}",
         f"- 主语言：{ctx.language}　创建于：{ctx.created_at or '未知'}",
     ]
     if ctx.stars:
@@ -252,7 +252,7 @@ def render_quickstart_context(ctx: RepoContext, *, max_chars: int = 16000) -> st
         parts.append(f"\n## 目录结构（已过滤依赖目录与构建产物，最深 4 层）\n{ctx.file_tree}")
 
     if ctx.starter_issues:
-        parts.append("\n## 起步任务（开放且带新人标签的真实 Issue，只能引用这里的编号）")
+        parts.append("\n## 起步任务（开放且带新人标签的真实 Issue）")
         for issue in ctx.starter_issues:
             labels = "、".join(issue.labels) or "（无标签）"
             parts.append(
@@ -264,8 +264,7 @@ def render_quickstart_context(ctx: RepoContext, *, max_chars: int = 16000) -> st
                 parts.append(f"正文：{issue.body}")
     else:
         parts.append(
-            "\n## 起步任务\n（备份里没有带新人标签的开放 Issue：请改为讲解如何自己筛选可上手的任务，"
-            "不要编造编号）"
+            "\n## 起步任务\n（目前没有找到带新人标签的开放 Issue。）"
         )
 
     if ctx.wiki_excerpt:
