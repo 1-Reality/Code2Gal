@@ -72,6 +72,7 @@ jobs:
     uses: ./.github/workflows/generate-core.yml
     with:
       repository: ${{ matrix.request.repository }}
+      mode: ${{ matrix.request.mode || 'chronicle' }}
       queue_name: ${{ matrix.request.queue_name || 'default' }}
       model: ${{ matrix.request.model }}
       base_url: ${{ matrix.request.base_url }}

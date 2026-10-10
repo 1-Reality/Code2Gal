@@ -6,6 +6,10 @@ on:
       repository:
         required: true
         type: string
+      mode:
+        required: false
+        default: "chronicle"
+        type: string
       model:
         required: true
         type: string
@@ -175,6 +179,9 @@ jobs:
             project_key="${slug}--${queue_slug}-${queue_hash}"
           fi
 
+          mode="${{ inputs.mode }}"
+          case "$mode" in chronicle|overview|quickstart) ;; *) echo "::error::Unknown mode: $mode"; exit 2 ;; esac
+          if [[ "$mode" != "chronicle" ]]; then project_key="${project_key}--${mode}"; fi
           echo "target=$target" >> "$GITHUB_OUTPUT"
           echo "owner=$owner" >> "$GITHUB_OUTPUT"
           echo "repo=$repo" >> "$GITHUB_OUTPUT"
@@ -286,6 +293,7 @@ jobs:
         env:
           TARGET_REPOSITORY: ${{ steps.target.outputs.target }}
           OUTPUT_PROJECT: ${{ steps.target.outputs.project_key }}
+          MODE: ${{ inputs.mode }}
           THREADS: ${{ inputs.threads }}
           SOURCE_CONTEXT: ${{ inputs.source_context }}
           SOURCE_HISTORY: ${{ inputs.source_history }}
@@ -298,6 +306,7 @@ jobs:
 
           args=(
             "$TARGET_REPOSITORY"
+            --mode "$MODE"
             --threads "$THREADS"
             --save-prompt .repo2gal/audit/prompt.txt
           )
