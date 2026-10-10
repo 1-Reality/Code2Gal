@@ -1,0 +1,18 @@
+{
+  "request_id": "38053299013-1",
+  "queue_name": "261010qs",
+  "mode": "quickstart",
+  "task_id": "run-39-0187886bf94dccf7",
+  "repository": "ucxn/bro-stat",
+  "model": "deepseek-v4-pro",
+  "base_url": "https://api.deepseek.com/v1",
+  "threads": "12",
+  "source_context": false,
+  "source_history": "1",
+  "performance": true,
+  "strict": false,
+  "strict_performance": false,
+  "dry_run": false,
+  "deploy_pages": true,
+  "code_ref": "upstream-features"
+}
