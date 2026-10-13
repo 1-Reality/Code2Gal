@@ -1,0 +1,42 @@
+name: Deploy Pages Store
+
+# Publish the current contents of the `pages-store` branch to GitHub Pages
+# as-is. Use after hand-adding static pages to pages-store (no generation run
+# needed). The generate / deploy-existing workflows do the same final steps
+# after merging a generated project.
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: code2gal-pages-store
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Deploy pages-store to GitHub Pages
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages-direct
+      url: ${{ steps.deployment.outputs.page_url }}
+
+    steps:
+      - name: Checkout persistent Pages store
+        uses: actions/checkout@v4
+        with:
+          ref: pages-store
+          fetch-depth: 1
+
+      - name: Upload complete multi-project site for GitHub Pages
+        uses: actions/upload-pages-artifact@v5
+        with:
+          path: .
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v5
