@@ -27,7 +27,7 @@ jobs:
 
     steps:
       - name: Checkout persistent Pages store
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           ref: pages-store
           fetch-depth: 1
