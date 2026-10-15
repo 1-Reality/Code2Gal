@@ -83,7 +83,7 @@ jobs:
 
     steps:
       - name: Checkout generation queue
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           ref: generation-queue
           path: generation-queue

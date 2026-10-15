@@ -93,7 +93,7 @@ jobs:
 
     steps:
       - name: Checkout Code2Gal
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           ref: ${{ inputs.code_ref }}
 
@@ -396,7 +396,7 @@ jobs:
       cancel-in-progress: false
     steps:
       - name: Checkout generation queue
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           ref: generation-queue
           path: generation-queue
@@ -444,7 +444,7 @@ jobs:
       cancel-in-progress: false
     steps:
       - name: Checkout generation queue
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           ref: generation-queue
           path: generation-queue
@@ -514,13 +514,13 @@ jobs:
 
     steps:
       - name: Checkout Code2Gal deployment tools
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           ref: main
           path: code2gal
 
       - name: Checkout persistent Pages store
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           ref: pages-store
           path: pages-store
